@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "odoo-fast-mcp"
+version = "0.1.0"
+description = "MCP server for Odoo."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Mark Okolov", email = "okolovmark@gmail.com" },
+]
+classifiers = [
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+keywords = ["odoo", "mcp", "erp", "integration", "rpc", "model-context-protocol"]
+
+dependencies = [
+    "OdooRPC==0.10.1",
+    "fastmcp==2.12.5"
+]
+
+[project.urls]
+Homepage = "https://github.com/okolovmark/odoo-fast-mcp"
+Repository = "https://github.com/okolovmark/odoo-fast-mcp.git"
+
+# Entry point to run the server
+[project.scripts]
+odoo-fast-mcp = "server:main_cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+plugins = ["pydantic.mypy"]
+
+[tool.flake8]
+max-line-length = 100
+exclude = [".git", "__pycache__", "build", "dist"]
+per-file-ignores = [
+    "__init__.py:F401",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py313"]
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 100

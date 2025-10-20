@@ -1,0 +1,27 @@
+{
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "python.analysis.languageServerMode": "full",
+    "python.languageServer": "Pylance",
+    "python.analysis.aiHoverSummaries": true,
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.completeFunctionParens": true,
+    "python.analysis.diagnosticMode": "workspace",
+    "python.analysis.inlayHints.callArgumentNames": "all",
+    "python.analysis.inlayHints.functionReturnTypes": true,
+    "python.analysis.inlayHints.pytestParameters": true,
+    "python.analysis.inlayHints.variableTypes": true,
+    "python.analysis.typeCheckingMode": "standard",
+    "python.analysis.typeEvaluation.deprecateTypingAliases": true,
+    "python.analysis.exclude": [
+        "**/__pycache__",
+        ".venv",
+    ],
+    "python.analysis.include": [
+        "src",
+    ],
+    "files.exclude": {
+        "**/*.egg-info": true,
+        "**/__pycache__": true
+    },
+    "debugpy.showPythonInlineValues": true,
+}

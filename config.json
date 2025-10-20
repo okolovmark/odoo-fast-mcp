@@ -1,0 +1,12 @@
+{
+  "protocol": "jsonrpc",
+  "connection_type": "stdio",
+  "odoo_url": "http://localhost:16069",
+  "database": "develop",
+  "username": "admin",
+  "password": "admin",
+
+  "max_connections": 5,
+  "health_check_interval": 300,
+  "timeout": 30
+}
