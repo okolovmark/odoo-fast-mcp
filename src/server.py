@@ -1,10 +1,16 @@
 from fastmcp import FastMCP, Context
+from fastmcp.prompts.prompt import Message, PromptResult
 from typing import Annotated, Literal
 from pydantic import Field
 import anyio
 from anyio import to_thread
 from dataclasses import dataclass
+import argparse
+import logging
+import sys
+from functools import partial
 
+logger = logging.getLogger(__name__)
 
 mcp: FastMCP = FastMCP(
     name="Odoo Fast MCP",
@@ -104,18 +110,50 @@ async def get_user_profile(user_id: int) -> dict:
 
 
 @mcp.prompt
-async def analyze_data(data_points: list[float]) -> str:
-    """Creates a prompt asking for analysis of numerical data."""
-    formatted_data = ", ".join(str(point) for point in data_points)
-    return f"Please analyze these data points: {formatted_data}"
+async def generate_code_request(language: str, task_description: str) -> PromptResult:
+    """Generates a user message requesting code generation."""
+    content = f"Write a {language} function that performs the following task: {task_description}"
+
+    return Message(content)
 
 
-async def _main_async() -> None:
-    await mcp.run_async(transport="http", host="127.0.0.1", port=8000)
+@mcp.prompt
+async def analyze_data(numbers: list[int], metadata: dict[str, str], threshold: float) -> str:
+    """Analyze numerical data."""
+    avg = sum(numbers) / len(numbers)
+    return f"Average: {avg}, above threshold: {avg > threshold}"
+
+
+@mcp.prompt
+async def roleplay_scenario(character: str, situation: str) -> PromptResult:
+    """Sets up a roleplaying scenario with initial messages."""
+    return [
+        Message(f"Let's roleplay. You are {character}. The situation is: {situation}"),
+        Message("Okay, I understand. I am ready. What happens next?", role="assistant"),
+    ]
+
+
+# @mcp.prompt
+# async def data_based_prompt(data_id: str) -> str:
+#     """Generates a prompt based on data that needs to be fetched."""
+#     # In a real scenario, you might fetch data from a database or API
+#     async with aiohttp.ClientSession() as session:
+#         async with session.get(f"https://api.example.com/data/{data_id}") as response:
+#             data = await response.json()
+#             return f"Analyze this data: {data['content']}"
+
+
+async def _main_async(config_path: str = ".env") -> None:
+    # await mcp.run_async(transport="http", host="127.0.0.1", port=8080)
+    await mcp.run_async(transport="stdio")
 
 
 def main_cli() -> None:
-    anyio.run(func=_main_async)
+    """Command line entry point."""
+    parser = argparse.ArgumentParser(description="Run the Odoo Fast MCP server.")
+    parser.add_argument("--config", help="Path to configuration file")
+    args = parser.parse_args()
+    anyio.run(partial(_main_async, config_path=args.config))
 
 
 if __name__ == "__main__":
