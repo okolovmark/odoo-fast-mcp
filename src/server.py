@@ -9,8 +9,29 @@ import argparse
 import logging
 import sys
 from functools import partial
+from fastmcp.server.elicitation import (
+    AcceptedElicitation, 
+    DeclinedElicitation, 
+    CancelledElicitation,
+)
+from fastmcp.server.middleware import Middleware, MiddlewareContext
+# TODO: check existing middleware and possibly reuse here fastmcp.server.middleware 
 
 logger = logging.getLogger(__name__)
+
+
+class LoggingMiddleware(Middleware):
+    """Middleware that logs all MCP operations."""
+    
+    async def on_message(self, context: MiddlewareContext, call_next):
+        """Called for all MCP messages."""
+        print(f"Processing {context.method} from {context.source}")
+        
+        result = await call_next(context)
+        
+        print(f"Completed {context.method}")
+        return result
+
 
 mcp: FastMCP = FastMCP(
     name="Odoo Fast MCP",
@@ -18,7 +39,7 @@ mcp: FastMCP = FastMCP(
         This server provides tools to interact with Odoo.
     """,
 )
-
+mcp.add_middleware(LoggingMiddleware())
 
 @dataclass
 class Person:
@@ -72,6 +93,21 @@ async def process_image(
         "resized": resize,
         "format": format,
     }
+
+
+@mcp.tool
+async def pattern_example(ctx: Context) -> str:
+    result = await ctx.elicit("Approve this action?", response_type=None)
+    if result == DeclinedElicitation():
+        return "Action not approved"
+    result = await ctx.elicit("Enter your response:", response_type=str)
+    match result:
+        case AcceptedElicitation(data=information):
+            return f"Hello {information}!"
+        case DeclinedElicitation():
+            return "No name provided"
+        case CancelledElicitation():
+            return "Operation cancelled"
 
 
 @mcp.resource("data://config")
