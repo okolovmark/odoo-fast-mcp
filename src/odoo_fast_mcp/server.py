@@ -1,34 +1,35 @@
-from fastmcp import FastMCP, Context
-from fastmcp.prompts.prompt import Message, PromptResult
-from typing import Annotated, Literal
-from pydantic import Field
-import anyio
-from anyio import to_thread
-from dataclasses import dataclass
 import argparse
 import logging
-import sys
+from dataclasses import dataclass
 from functools import partial
+from typing import Annotated, Literal
+
+import anyio
+from anyio import to_thread
+from fastmcp import Context, FastMCP
+from fastmcp.prompts.prompt import Message, PromptResult
 from fastmcp.server.elicitation import (
-    AcceptedElicitation, 
-    DeclinedElicitation, 
+    AcceptedElicitation,
     CancelledElicitation,
+    DeclinedElicitation,
 )
 from fastmcp.server.middleware import Middleware, MiddlewareContext
-# TODO: check existing middleware and possibly reuse here fastmcp.server.middleware 
+from pydantic import Field
+
+# TODO: check existing middleware and possibly reuse here fastmcp.server.middleware
 
 logger = logging.getLogger(__name__)
 
 
 class LoggingMiddleware(Middleware):
     """Middleware that logs all MCP operations."""
-    
+
     async def on_message(self, context: MiddlewareContext, call_next):
         """Called for all MCP messages."""
         print(f"Processing {context.method} from {context.source}")
-        
+
         result = await call_next(context)
-        
+
         print(f"Completed {context.method}")
         return result
 
@@ -40,6 +41,7 @@ mcp: FastMCP = FastMCP(
     """,
 )
 mcp.add_middleware(LoggingMiddleware())
+
 
 @dataclass
 class Person:

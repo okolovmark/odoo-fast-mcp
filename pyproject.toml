@@ -35,7 +35,7 @@ dev = ["ruff", "ty"]
 
 # Entry point to run the server
 [project.scripts]
-odoo-fast-mcp = "server:main_cli"
+odoo-fast-mcp = "odoo_fast_mcp.server:main_cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]
