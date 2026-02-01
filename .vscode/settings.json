@@ -5,7 +5,7 @@
         "build": true
     },
     "ty.interpreter": [
-        "{workspaceFolder}/.venv/bin/python"
+        "${workspaceFolder}/.venv/bin/python"
     ],
-    "debugpy.showPythonInlineValues": true,
+    "debugpy.showPythonInlineValues": true
 }
