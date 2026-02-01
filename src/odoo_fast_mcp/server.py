@@ -171,16 +171,6 @@ async def roleplay_scenario(character: str, situation: str) -> PromptResult:
     ]
 
 
-# @mcp.prompt
-# async def data_based_prompt(data_id: str) -> str:
-#     """Generates a prompt based on data that needs to be fetched."""
-#     # In a real scenario, you might fetch data from a database or API
-#     async with aiohttp.ClientSession() as session:
-#         async with session.get(f"https://api.example.com/data/{data_id}") as response:
-#             data = await response.json()
-#             return f"Analyze this data: {data['content']}"
-
-
 async def _main_async(config_path: str = ".env") -> None:
     # await mcp.run_async(transport="http", host="127.0.0.1", port=8080)
     await mcp.run_async(transport="stdio")
