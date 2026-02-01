@@ -1,5 +1,42 @@
 {
 	"servers": {
+		"serena": {
+				"command": "uvx",
+				"args": [
+						"--from",
+						"git+https://github.com/oraios/serena",
+						"serena",
+						"start-mcp-server",
+						"--context",
+						"ide",
+						"--project",
+						"${workspaceFolder}",
+						"--mode",
+						"planning",
+						"--mode",
+						"editing",
+						"--mode",
+						"interactive",
+						"--mode",
+						"onboarding"
+				],
+				"type": "stdio",
+				"cwd": "${workspaceFolder}"
+		},
+		"playwright": {
+				"command": "npx",
+				"args": [
+						"@playwright/mcp@latest"
+				],
+				"type": "stdio"
+		},
+		"context": {
+				"command": "npx",
+				"args": [
+						"@upstash/context7-mcp@1.0.31"
+				],
+				"type": "stdio"
+		},
 		"odoo": {
 			"type": "stdio",
 			"command": "${workspaceFolder}/.venv/bin/odoo-mcp-server",
