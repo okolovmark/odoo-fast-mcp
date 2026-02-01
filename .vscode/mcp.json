@@ -39,10 +39,10 @@
 		},
 		"odoo": {
 			"type": "stdio",
-			"command": "${workspaceFolder}/.venv/bin/odoo-mcp-server",
+			"command": "${workspaceFolder}/.venv/bin/odoo-fast-mcp",
 			"args": [
 				"--config",
-				"${workspaceFolder}/mcp-odoo-panda.json"
+				"${workspaceFolder}/config.json"
 			]
 		}
 	},
