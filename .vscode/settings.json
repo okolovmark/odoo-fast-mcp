@@ -1,0 +1,11 @@
+{
+    "files.exclude": {
+        "**/*.egg-info": true,
+        "**/__pycache__": true,
+        "build": true
+    },
+    "ty.interpreter": [
+        "${workspaceFolder}/.venv/bin/python"
+    ],
+    "debugpy.showPythonInlineValues": true
+}
