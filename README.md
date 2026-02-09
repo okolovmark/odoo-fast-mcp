@@ -183,6 +183,8 @@ Once the virtual environment is set up and activated:
 
 ## Running the Server 🏃
 
+### Stdio Transport (default)
+
 ```bash
 # Run with .env file in current directory
 odoo-fast-mcp
@@ -195,6 +197,50 @@ odoo-fast-mcp --debug
 
 # Or run directly
 python -m odoo_fast_mcp.server
+```
+
+### HTTP Transport (Streamable HTTP)
+
+HTTP transport turns the MCP server into a web service accessible via URL. This is required for MCP Apps, remote deployments, and multi-client setups.
+
+```bash
+# Start HTTP server on default port 8000
+odoo-fast-mcp --transport http
+
+# Custom host and port
+odoo-fast-mcp --transport http --host 127.0.0.1 --port 3001
+
+# With debug logging
+odoo-fast-mcp --transport http --port 3001 --debug
+```
+
+The server will be available at `http://<host>:<port>/mcp`.
+
+You can also configure transport via environment variables in your `.env` file:
+
+```bash
+MCP_TRANSPORT=http
+MCP_HOST=0.0.0.0
+MCP_PORT=8000
+```
+
+> **Note:** CLI arguments take precedence over environment variables, which take precedence over defaults.
+
+### SSE Transport (legacy)
+
+```bash
+odoo-fast-mcp --transport sse --port 8000
+```
+
+### Connecting from MCP clients (HTTP mode)
+
+When using HTTP transport, configure your MCP client to connect via URL instead of stdio:
+
+```json
+"odoo": {
+    "type": "http",
+    "url": "http://localhost:8000/mcp"
+}
 ```
 
 ## Known Limitations ⚠️

@@ -998,9 +998,19 @@ async def get_model_fields_resource(model_name: str) -> dict[str, Any]:
 # =============================================================================
 
 
-async def _main_async(env_path: str | None = None) -> None:
+async def _main_async(
+    env_path: str | None = None,
+    transport: str = "stdio",
+    host: str = "0.0.0.0",
+    port: int = 8000,
+) -> None:
     """Async entry point for the MCP server."""
     config = load_config(env_path)
+
+    # Allow env vars to override CLI defaults
+    transport = os.getenv("MCP_TRANSPORT", transport)
+    host = os.getenv("MCP_HOST", host)
+    port = int(os.getenv("MCP_PORT", str(port)))
 
     # Auto-connect if config has credentials
     if all(config.get(k) for k in ["odoo_url", "database", "username", "password"]):
@@ -1012,15 +1022,15 @@ async def _main_async(env_path: str | None = None) -> None:
             host_part = url.replace("https://", "").replace("http://", "")
             # Split host and port
             if ":" in host_part:
-                host, port_str = host_part.split(":")
-                port = int(port_str)
+                odoo_host, port_str = host_part.split(":")
+                odoo_port = int(port_str)
             else:
-                host = host_part
-                port = 443 if "ssl" in protocol else 8069
+                odoo_host = host_part
+                odoo_port = 443 if "ssl" in protocol else 8069
 
             odoo_manager.connect(
-                host=host,
-                port=port,
+                host=odoo_host,
+                port=odoo_port,
                 protocol=protocol,
                 database=config["database"],
                 username=config["username"],
@@ -1031,7 +1041,15 @@ async def _main_async(env_path: str | None = None) -> None:
         except (ConnectionError, odoorpc.error.RPCError, OSError) as e:
             logger.warning("Auto-connect failed: %s. Use 'connect' tool manually.", e)
 
-    await mcp.run_async(transport="stdio")
+    if transport == "http":
+        logger.info("Starting HTTP (Streamable HTTP) transport on %s:%d", host, port)
+        await mcp.run_async(transport="http", host=host, port=port)
+    elif transport == "sse":
+        logger.info("Starting SSE transport on %s:%d", host, port)
+        await mcp.run_async(transport="sse", host=host, port=port)
+    else:
+        logger.info("Starting stdio transport")
+        await mcp.run_async(transport="stdio")
 
 
 def main_cli() -> None:
@@ -1039,6 +1057,23 @@ def main_cli() -> None:
     parser = argparse.ArgumentParser(description="Run the Odoo Fast MCP server.")
     parser.add_argument("--env", help="Path to .env configuration file")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "http", "sse"],
+        default="stdio",
+        help="Transport protocol: stdio (default), http (Streamable HTTP), or sse",
+    )
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="Host to bind HTTP/SSE server to (default: 0.0.0.0)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port for HTTP/SSE server (default: 8000)",
+    )
     args = parser.parse_args()
 
     if args.debug:
@@ -1046,7 +1081,15 @@ def main_cli() -> None:
     else:
         logging.basicConfig(level=logging.INFO)
 
-    anyio.run(partial(_main_async, env_path=args.env))
+    anyio.run(
+        partial(
+            _main_async,
+            env_path=args.env,
+            transport=args.transport,
+            host=args.host,
+            port=args.port,
+        ),
+    )
 
 
 if __name__ == "__main__":
