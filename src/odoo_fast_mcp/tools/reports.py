@@ -1,8 +1,7 @@
 """Report generation tools: get_report."""
 
 import json
-from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from anyio import to_thread
 from pydantic import Field
@@ -13,7 +12,7 @@ from odoo_fast_mcp.server import mcp
 
 @mcp.tool(
     annotations={
-        "title": "Generate Report",
+        "title": "Get Report Info",
         "readOnlyHint": True,
         "destructiveHint": False,
         "idempotentHint": True,
@@ -31,12 +30,12 @@ async def get_report(
     ids: Annotated[
         str, Field(description="JSON array of record IDs to include in report, e.g., '[1, 2]'"),
     ],
-    output_path: Annotated[
-        str,
-        Field(description="File path to save the report (PDF format)"),
-    ],
-) -> dict[str, str | int]:
-    """Generate and save an Odoo report as PDF.
+) -> dict[str, Any]:
+    """Look up an Odoo report and return its metadata.
+
+    Due to CSRF protection in Odoo 16+, direct report download via RPC
+    is not supported. This tool returns report metadata and guidance on
+    how to obtain the actual PDF.
 
     Common reports:
     - Invoice: account.report_invoice
@@ -45,15 +44,6 @@ async def get_report(
     - Delivery Slip: stock.report_deliveryslip
     """
     parsed_ids = json.loads(ids)
-
-    def _generate() -> dict[str, str | int]:
-        report_data = odoo_manager.get_report(report_name, parsed_ids)
-        path = Path(output_path)
-        path.write_bytes(report_data)
-        return {
-            "status": "success",
-            "path": str(path.absolute()),
-            "size_bytes": len(report_data),
-        }
-
-    return await to_thread.run_sync(_generate)
+    return await to_thread.run_sync(
+        lambda: odoo_manager.get_report(report_name, parsed_ids),
+    )

@@ -1,30 +1,37 @@
 """Odoo connection manager with thread-safe operations."""
 
+import threading
 from typing import Any
 
 import odoorpc
 
 
 class OdooConnectionManager:
-    """Manages OdooRPC connection with thread-safe operations."""
+    """Manages OdooRPC connection with thread-safe operations.
+
+    All state mutations and reads are guarded by a reentrant lock
+    to prevent races when tool handlers run in concurrent worker threads.
+    """
 
     def __init__(self):
+        self._lock = threading.RLock()
         self._odoo: odoorpc.ODOO | None = None
-        self._config: dict[str, Any] = {}
         self._connected: bool = False
 
     @property
     def odoo(self) -> odoorpc.ODOO:
         """Get the current Odoo connection."""
-        if not self._odoo or not self._connected:
-            msg = "Not connected to Odoo. Use 'connect' tool first."
-            raise ConnectionError(msg)
-        return self._odoo
+        with self._lock:
+            if not self._odoo or not self._connected:
+                msg = "Not connected to Odoo. Use 'connect' tool first."
+                raise ConnectionError(msg)
+            return self._odoo
 
     @property
     def is_connected(self) -> bool:
         """Check if connected to Odoo."""
-        return self._connected and self._odoo is not None
+        with self._lock:
+            return self._connected and self._odoo is not None
 
     def connect(
         self,
@@ -37,50 +44,46 @@ class OdooConnectionManager:
         timeout: int = 30,
     ) -> dict[str, Any]:
         """Establish connection to Odoo server."""
-        try:
-            self._odoo = odoorpc.ODOO(host, protocol, port)
-            self._odoo.config["timeout"] = timeout
+        with self._lock:
+            try:
+                self._odoo = odoorpc.ODOO(host, protocol, port)
+                self._odoo.config["timeout"] = timeout
 
-            if database and username and password:
-                self._odoo.login(database, username, password)
-                self._connected = True
-                # Store config for report HTTP requests
-                self._config = {
-                    "host": host,
-                    "port": port,
-                    "protocol": protocol,
-                    "database": database,
-                    "username": username,
-                    "password": password,
-                }
+                if database and username and password:
+                    self._odoo.login(database, username, password)
+                    self._connected = True
+                    return {
+                        "status": "connected",
+                        "host": host,
+                        "port": port,
+                        "database": database,
+                        "user": self._odoo.env.user.name,
+                        "uid": self._odoo.env.uid,
+                        "version": self._odoo.version,
+                    }
+
                 return {
-                    "status": "connected",
+                    "status": "connected_no_auth",
                     "host": host,
                     "port": port,
-                    "database": database,
-                    "user": self._odoo.env.user.name,
-                    "uid": self._odoo.env.uid,
-                    "version": self._odoo.version,
+                    "message": (
+                        "Connected but not authenticated. Re-run 'connect' with "
+                        "database, username, and password to authenticate."
+                    ),
                 }
 
-            return {
-                "status": "connected_no_auth",
-                "host": host,
-                "port": port,
-                "message": "Connected but not authenticated. Call login separately.",
-            }
-
-        except Exception as e:
-            self._connected = False
-            msg = f"Connection failed: {e}"
-            raise ConnectionError(msg) from e
+            except Exception as e:
+                self._connected = False
+                msg = f"Connection failed: {e}"
+                raise ConnectionError(msg) from e
 
     def disconnect(self) -> dict[str, str]:
         """Disconnect from Odoo server."""
-        if self._odoo:
-            self._odoo = None
-        self._connected = False
-        return {"status": "disconnected"}
+        with self._lock:
+            if self._odoo:
+                self._odoo = None
+            self._connected = False
+            return {"status": "disconnected"}
 
     def list_databases(self, host: str, port: int = 8069, protocol: str = "jsonrpc") -> list[str]:
         """List available databases on the Odoo server."""
@@ -192,16 +195,12 @@ class OdooConnectionManager:
         self,
         report_name: str,
         record_ids: list[int],
-        report_type: str = "pdf",
-    ) -> bytes:
-        """Generate and download a report.
+    ) -> dict[str, Any]:
+        """Look up an Odoo report and return its metadata.
 
         Note: Due to CSRF protection in Odoo 16+, direct report downloads
-        via HTTP are restricted. This method provides information about the
-        report but cannot download the actual PDF without browser interaction.
-
-        For report generation, consider using Odoo's scheduled actions or
-        the web interface.
+        via HTTP/RPC are not supported. This method returns the report metadata
+        along with guidance on how to obtain the actual PDF.
         """
         # Try to find the report by name or report_name field
         report_model = self.odoo.env["ir.actions.report"]
@@ -216,17 +215,19 @@ class OdooConnectionManager:
             raise ValueError(msg)
 
         report_info = reports[0]
-
-        # Due to CSRF protection in Odoo 16+, we cannot download reports
-        # via HTTP without a valid CSRF token from the web client.
-        # OdooRPC's report.download is also not implemented for Odoo 16+.
-        msg = (
-            f"Report download is not supported for Odoo 16+ due to CSRF protection. "
-            f"Report found: '{report_info['name']}' ({report_info['report_name']}). "
-            f"Please use the Odoo web interface to download reports, or consider "
-            f"using scheduled actions for automated report generation."
-        )
-        raise NotImplementedError(msg)
+        return {
+            "report_name": report_info["report_name"],
+            "display_name": report_info["name"],
+            "model": report_info["model"],
+            "report_type": report_info["report_type"],
+            "record_ids": record_ids,
+            "download_supported": False,
+            "guidance": (
+                "Report download is not supported for Odoo 16+ due to CSRF protection. "
+                "Use the Odoo web interface to download reports, or consider "
+                "using scheduled actions for automated report generation."
+            ),
+        }
 
     def name_search(
         self,
