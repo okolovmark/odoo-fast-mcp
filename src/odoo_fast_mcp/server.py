@@ -26,6 +26,8 @@ from fastmcp import FastMCP
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 from pydantic import Field
 
+from odoo_fast_mcp.prompts import register_prompts
+
 logger = logging.getLogger(__name__)
 
 
@@ -361,6 +363,7 @@ mcp: FastMCP = FastMCP(
     lifespan=lifespan,
 )
 mcp.add_middleware(LoggingMiddleware())
+register_prompts(mcp)
 
 
 # =============================================================================

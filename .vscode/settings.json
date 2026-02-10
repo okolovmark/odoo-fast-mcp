@@ -7,5 +7,6 @@
     "ty.interpreter": [
         "${workspaceFolder}/.venv/bin/python"
     ],
+    "ty.path": ["${workspaceFolder}/.venv/bin/ty"],
     "debugpy.showPythonInlineValues": true
 }

@@ -41,6 +41,7 @@
 			"type": "stdio",
 			"command": "uvx",
 			"args": [
+				"--refresh",
 				"--from",
 				".",
 				"odoo-fast-mcp"
