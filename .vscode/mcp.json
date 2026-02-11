@@ -48,6 +48,15 @@
 			],
 			"envFile": "${workspaceFolder}/.env"
 		},
+		"mcp-pdb": {
+			"type": "stdio",
+			"command": "uvx",
+			"args": [
+				"--from",
+				"mcp-pdb==0.4.0",
+				"mcp-pdb"
+			]
+		},
 		"github": {
 			"type": "http",
 			"url": "https://api.githubcopilot.com/mcp/",
