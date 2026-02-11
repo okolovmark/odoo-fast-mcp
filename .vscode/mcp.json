@@ -1,76 +1,76 @@
 {
-	"servers": {
-		"serena": {
-				"command": "uvx",
-				"args": [
-						"--from",
-						"git+https://github.com/oraios/serena",
-						"serena",
-						"start-mcp-server",
-						"--context",
-						"ide",
-						"--project",
-						"${workspaceFolder}",
-						"--mode",
-						"planning",
-						"--mode",
-						"editing",
-						"--mode",
-						"interactive",
-						"--mode",
-						"onboarding"
-				],
-				"type": "stdio",
-				"cwd": "${workspaceFolder}"
-		},
-		"playwright": {
-				"command": "npx",
-				"args": [
-						"@playwright/mcp@latest"
-				],
-				"type": "stdio"
-		},
-		"context": {
-				"command": "npx",
-				"args": [
-						"@upstash/context7-mcp@1.0.31"
-				],
-				"type": "stdio"
-		},
-		"odoo": {
-			"type": "stdio",
-			"command": "uvx",
-			"args": [
-				"--refresh",
-				"--from",
-				".",
-				"odoo-fast-mcp"
-			],
-			"envFile": "${workspaceFolder}/.env"
-		},
-		"mcp-pdb": {
-			"type": "stdio",
-			"command": "uvx",
-			"args": [
-				"--from",
-				"mcp-pdb==0.4.0",
-				"mcp-pdb"
-			]
-		},
-		"github": {
-			"type": "http",
-			"url": "https://api.githubcopilot.com/mcp/",
-			"headers": {
-				"Authorization": "Bearer ${input:github_mcp_pat}"
-			}
-		}
-	},
-	"inputs": [
-		{
-		"type": "promptString",
-		"id": "github_mcp_pat",
-		"description": "GitHub Personal Access Token",
-		"password": true
-		}
-	]
+    "servers": {
+        "serena": {
+            "command": "uvx",
+            "args": [
+                "--from",
+                "git+https://github.com/oraios/serena",
+                "serena",
+                "start-mcp-server",
+                "--context",
+                "ide",
+                "--project",
+                "${workspaceFolder}",
+                "--mode",
+                "planning",
+                "--mode",
+                "editing",
+                "--mode",
+                "interactive",
+                "--mode",
+                "onboarding"
+            ],
+            "type": "stdio",
+            "cwd": "${workspaceFolder}"
+        },
+        "playwright": {
+            "command": "npx",
+            "args": [
+                "@playwright/mcp@latest"
+            ],
+            "type": "stdio"
+        },
+        "context": {
+            "command": "npx",
+            "args": [
+                "@upstash/context7-mcp@1.0.31"
+            ],
+            "type": "stdio"
+        },
+        "odoo": {
+            "type": "stdio",
+            "command": "uvx",
+            "args": [
+                "--refresh",
+                "--from",
+                ".",
+                "odoo-fast-mcp"
+            ],
+            "envFile": "${workspaceFolder}/.env"
+        },
+        "mcp-pdb": {
+            "type": "stdio",
+            "command": "uvx",
+            "args": [
+                "--from",
+                "mcp-pdb==0.4.0",
+                "mcp-pdb"
+            ]
+        },
+        "github": {
+            "type": "http",
+            "url": "https://api.githubcopilot.com/mcp/",
+            "headers": {
+                "Authorization": "Bearer ${input:github_mcp_pat}"
+            }
+        }
+    },
+    "inputs": [
+        {
+            "type": "promptString",
+            "id": "github_mcp_pat",
+            "description": "GitHub Personal Access Token",
+            "password": true
+        }
+    ]
 }
