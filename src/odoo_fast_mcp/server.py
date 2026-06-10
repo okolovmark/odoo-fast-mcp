@@ -20,7 +20,7 @@ import odoorpc
 from fastmcp import FastMCP
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 
-from odoo_fast_mcp.config import load_config
+from odoo_fast_mcp.config import load_config, parse_odoo_url
 from odoo_fast_mcp.connection import odoo_manager
 from odoo_fast_mcp.prompts import register_prompts
 
@@ -64,6 +64,10 @@ mcp: FastMCP = FastMCP(
 
         ## Getting Started
         1. Use `connect` to establish a connection to your Odoo server
+           - `connect(env_profile="prod")` reads ODOO_URL_PROD / ODOO_DATABASE_PROD /
+             ODOO_USERNAME_PROD / ODOO_PASSWORD_PROD from the server environment —
+             credentials never appear in the tool call. `env_profile="default"`
+             returns to the unsuffixed ODOO_* connection (local).
         2. Or use `list_databases` to see available databases first
 
         ## Available Operations
@@ -113,19 +117,7 @@ async def _main_async(
     # Auto-connect if config has credentials
     if all(config.get(k) for k in ["odoo_url", "database", "username", "password"]):
         try:
-            # Parse URL to get host and port
-            url = config["odoo_url"]
-            protocol = "jsonrpc+ssl" if url.startswith("https") else "jsonrpc"
-            # Remove protocol prefix and any trailing path ("host:port/odoo")
-            host_part = url.replace("https://", "").replace("http://", "")
-            host_part = host_part.split("/", 1)[0]
-            # Split host and port
-            if ":" in host_part:
-                odoo_host, port_str = host_part.split(":")
-                odoo_port = int(port_str)
-            else:
-                odoo_host = host_part
-                odoo_port = 443 if "ssl" in protocol else 8069
+            odoo_host, odoo_port, protocol = parse_odoo_url(config["odoo_url"])
 
             odoo_manager.connect(
                 host=odoo_host,

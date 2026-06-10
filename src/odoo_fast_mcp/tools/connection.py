@@ -5,6 +5,7 @@ from typing import Annotated, Any, Literal
 from anyio import to_thread
 from pydantic import Field
 
+from odoo_fast_mcp.config import load_profile, parse_odoo_url
 from odoo_fast_mcp.connection import odoo_manager
 from odoo_fast_mcp.server import mcp
 
@@ -19,22 +20,61 @@ from odoo_fast_mcp.server import mcp
     },
 )
 async def connect(
-    host: Annotated[str, Field(description="Odoo server hostname or IP address")],
-    database: Annotated[str, Field(description="Database name to connect to")],
-    username: Annotated[str, Field(description="Username for authentication")],
-    password: Annotated[str, Field(description="Password for authentication")],
+    host: Annotated[
+        str | None, Field(description="Odoo server hostname or IP address"),
+    ] = None,
+    database: Annotated[str | None, Field(description="Database name to connect to")] = None,
+    username: Annotated[str | None, Field(description="Username for authentication")] = None,
+    password: Annotated[str | None, Field(description="Password for authentication")] = None,
     port: Annotated[int, Field(description="Odoo server port", ge=1, le=65535)] = 8069,
     protocol: Annotated[
         Literal["jsonrpc", "jsonrpc+ssl"],
         Field(description="Protocol to use (jsonrpc or jsonrpc+ssl)"),
     ] = "jsonrpc",
     timeout: Annotated[int, Field(description="Connection timeout in seconds", ge=1)] = 30,
+    env_profile: Annotated[
+        str | None,
+        Field(
+            description="Connect using an env-suffix profile instead of explicit "
+            "credentials: 'prod' reads ODOO_URL_PROD / ODOO_DATABASE_PROD / "
+            "ODOO_USERNAME_PROD / ODOO_PASSWORD_PROD from the server's "
+            "environment (.env); 'default' reads the unsuffixed ODOO_* "
+            "variables. When set, the explicit credential arguments are "
+            "ignored and secrets never travel through the tool call.",
+        ),
+    ] = None,
 ) -> dict[str, Any]:
     """Connect and authenticate to an Odoo server.
 
-    Establishes a connection to the Odoo server and authenticates with the provided credentials.
+    Two ways to authenticate:
+    - `env_profile="prod"` — the server itself reads ODOO_*_PROD variables
+      from its environment; nothing secret appears in the tool arguments.
+    - Explicit `host` + `database` + `username` + `password`.
+
     This must be called before using most other tools.
     """
+    if env_profile is not None:
+        cfg = load_profile(env_profile)
+        p_host, p_port, p_protocol = parse_odoo_url(cfg["odoo_url"])
+        return await to_thread.run_sync(
+            lambda: odoo_manager.connect(
+                host=p_host,
+                port=p_port,
+                protocol=p_protocol,
+                database=cfg["database"],
+                username=cfg["username"],
+                password=cfg["password"],
+                timeout=cfg["timeout"],
+            ),
+        )
+
+    if not (host and database and username and password):
+        msg = (
+            "Provide either env_profile, or all of host, database, "
+            "username and password."
+        )
+        raise ValueError(msg)
+
     return await to_thread.run_sync(
         lambda: odoo_manager.connect(
             host=host,
