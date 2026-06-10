@@ -117,12 +117,13 @@ async def get_connection_status() -> dict[str, Any]:
         if not odoo_manager.is_connected:
             return {"connected": False}
         odoo = odoo_manager.odoo
+        info = odoo_manager.get_user_info(with_company=True)
         return {
             "connected": True,
             "database": odoo.env.db,
             "user_id": odoo.env.uid,
-            "user_name": odoo.env.user.name,
-            "company": odoo.env.user.company_id.name,
+            "user_name": info["name"],
+            "company": info["company"],
             "version": odoo.version,
         }
     return await to_thread.run_sync(_get_status)

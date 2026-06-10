@@ -19,7 +19,7 @@ async def get_status() -> dict[str, Any]:
         return {
             "connected": True,
             "database": odoo.env.db,
-            "user": odoo.env.user.name,
+            "user": odoo_manager.get_user_info()["name"],
             "uid": odoo.env.uid,
             "version": odoo.version,
         }

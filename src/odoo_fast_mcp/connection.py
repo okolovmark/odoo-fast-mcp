@@ -57,7 +57,7 @@ class OdooConnectionManager:
                         "host": host,
                         "port": port,
                         "database": database,
-                        "user": self._odoo.env.user.name,
+                        "user": self.get_user_info()["name"],
                         "uid": self._odoo.env.uid,
                         "version": self._odoo.version,
                     }
@@ -76,6 +76,21 @@ class OdooConnectionManager:
                 self._connected = False
                 msg = f"Connection failed: {e}"
                 raise ConnectionError(msg) from e
+
+    def get_user_info(self, with_company: bool = False) -> dict[str, Any]:
+        """Read the authenticated user's name (and company) with an explicit field list.
+
+        A bare ``env.user.name`` makes odoorpc read the whole res.users record,
+        which fires every computed field on the model — restricted service
+        accounts then hit AccessError on models they cannot read (e.g. a custom
+        compute touching account.move.line without compute_sudo).
+        """
+        fields = ["name", "company_id"] if with_company else ["name"]
+        rec = self.odoo.execute("res.users", "read", [self.odoo.env.uid], fields)[0]
+        info: dict[str, Any] = {"name": rec["name"]}
+        if with_company:
+            info["company"] = rec["company_id"][1] if rec["company_id"] else None
+        return info
 
     def disconnect(self) -> dict[str, str]:
         """Disconnect from Odoo server."""
