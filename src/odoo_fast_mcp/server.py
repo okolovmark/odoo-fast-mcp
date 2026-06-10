@@ -116,8 +116,9 @@ async def _main_async(
             # Parse URL to get host and port
             url = config["odoo_url"]
             protocol = "jsonrpc+ssl" if url.startswith("https") else "jsonrpc"
-            # Remove protocol prefix
+            # Remove protocol prefix and any trailing path ("host:port/odoo")
             host_part = url.replace("https://", "").replace("http://", "")
+            host_part = host_part.split("/", 1)[0]
             # Split host and port
             if ":" in host_part:
                 odoo_host, port_str = host_part.split(":")

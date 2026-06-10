@@ -43,14 +43,19 @@ class OdooConnectionManager:
         password: str | None = None,
         timeout: int = 30,
     ) -> dict[str, Any]:
-        """Establish connection to Odoo server."""
+        """Establish connection to Odoo server.
+
+        The current session (if any) is swapped out only after the new login
+        succeeds — a failed attempt must not clobber a working connection.
+        """
         with self._lock:
             try:
-                self._odoo = odoorpc.ODOO(host, protocol, port)
-                self._odoo.config["timeout"] = timeout
+                new_odoo = odoorpc.ODOO(host, protocol, port)
+                new_odoo.config["timeout"] = timeout
 
                 if database and username and password:
-                    self._odoo.login(database, username, password)
+                    new_odoo.login(database, username, password)
+                    self._odoo = new_odoo
                     self._connected = True
                     return {
                         "status": "connected",
@@ -62,18 +67,19 @@ class OdooConnectionManager:
                         "version": self._odoo.version,
                     }
 
+                # Reachability probe only — keep whatever session is active.
                 return {
                     "status": "connected_no_auth",
                     "host": host,
                     "port": port,
                     "message": (
-                        "Connected but not authenticated. Re-run 'connect' with "
-                        "database, username, and password to authenticate."
+                        "Server reachable but not authenticated; any previous "
+                        "session is kept. Re-run 'connect' with database, "
+                        "username, and password to authenticate."
                     ),
                 }
 
             except Exception as e:
-                self._connected = False
                 msg = f"Connection failed: {e}"
                 raise ConnectionError(msg) from e
 
@@ -167,10 +173,13 @@ class OdooConnectionManager:
         model: str,
         method: str,
         *args: Any,
-        **kwargs: Any,
     ) -> Any:
-        """Execute any method on a model."""
-        return self.odoo.execute(model, method, *args, **kwargs)
+        """Execute any method on a model (positional args only).
+
+        odoorpc's ``execute`` accepts no keyword arguments — passing any
+        would TypeError. Use :meth:`execute_kw` when kwargs are needed.
+        """
+        return self.odoo.execute(model, method, *args)
 
     def execute_kw(
         self,
