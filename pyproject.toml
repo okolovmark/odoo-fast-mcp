@@ -23,6 +23,7 @@ keywords = ["odoo", "mcp", "erp", "integration", "rpc", "model-context-protocol"
 
 dependencies = [
     "OdooRPC==0.10.1",
+    "cryptography>=42.0.0",
     "fastmcp==3.4.7",
     "python-dotenv>=1.0.0"
 ]
@@ -32,7 +33,7 @@ Homepage = "https://github.com/okolovmark/odoo-fast-mcp"
 Repository = "https://github.com/okolovmark/odoo-fast-mcp.git"
 
 [project.optional-dependencies]
-dev = ["ruff", "ty"]
+dev = ["pytest>=8.0", "ruff", "ty"]
 
 # Entry point to run the server
 [project.scripts]

@@ -3,6 +3,7 @@
 import logging
 import threading
 import time
+from collections.abc import Callable
 from typing import Any, cast
 
 import odoorpc
@@ -287,17 +288,54 @@ class ConnectionRegistry:
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._managers: dict[str, OdooConnectionManager] = {}
+        self._logins: dict[str, threading.Lock] = {}
         self._last_used: dict[str, float] = {}
+        self._credentials: Callable[[str], dict[str, Any] | None] | None = None
+
+    def set_credential_provider(
+        self,
+        provider: Callable[[str], dict[str, Any] | None] | None,
+    ) -> None:
+        """Teach the registry how to log an identity in.
+
+        The provider is handed an identity and returns connect() arguments, or
+        None if that person has not linked an Odoo account yet. Registered by
+        the auth layer at startup; without it the registry hands out
+        unconnected managers and the ``connect`` tool remains the way in.
+        """
+        with self._lock:
+            self._credentials = provider
 
     def get(self, identity: str) -> OdooConnectionManager:
-        """Return this identity's manager, creating an unconnected one if new."""
+        """Return this identity's manager, connecting it if it isn't yet.
+
+        Reconnecting here — rather than once at login — is what makes an idle
+        sweep, an expired Odoo session or a server restart invisible to the
+        caller: the next tool call simply logs back in.
+        """
         with self._lock:
             manager = self._managers.get(identity)
             if manager is None:
                 manager = OdooConnectionManager()
                 self._managers[identity] = manager
+                self._logins[identity] = threading.Lock()
+            login_lock = self._logins[identity]
+            provider = self._credentials
             self._last_used[identity] = time.monotonic()
+
+        if provider is None:
             return manager
+
+        # Logging in is a network round trip measured in seconds. Held under the
+        # registry lock it would stall every other caller's lookup, so each
+        # identity serialises on its own lock instead.
+        with login_lock:
+            if not manager.is_connected:
+                credentials = provider(identity)
+                if credentials is not None:
+                    manager.connect(**credentials)
+                    logger.info("Opened Odoo session for %s", identity)
+        return manager
 
     def release_idle(self, max_idle_seconds: float) -> list[str]:
         """Disconnect identities untouched for ``max_idle_seconds``.
@@ -316,6 +354,7 @@ class ConnectionRegistry:
             ]
             for identity in stale:
                 self._managers.pop(identity).disconnect()
+                self._logins.pop(identity, None)
                 del self._last_used[identity]
             return stale
 
@@ -325,6 +364,7 @@ class ConnectionRegistry:
             for manager in self._managers.values():
                 manager.disconnect()
             self._managers.clear()
+            self._logins.clear()
             self._last_used.clear()
 
     @property
