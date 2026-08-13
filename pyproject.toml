@@ -23,7 +23,7 @@ keywords = ["odoo", "mcp", "erp", "integration", "rpc", "model-context-protocol"
 
 dependencies = [
     "OdooRPC==0.10.1",
-    "fastmcp==2.14.4",
+    "fastmcp==3.4.7",
     "python-dotenv>=1.0.0"
 ]
 
