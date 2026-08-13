@@ -273,6 +273,11 @@ class OdooConnectionManager:
 
 DEFAULT_IDENTITY = "default"
 
+# A shared deployment accumulates one Odoo session per person who ever called it;
+# drop the ones nobody is using rather than hold them until restart.
+IDLE_TIMEOUT_SECONDS = 30 * 60
+IDLE_SWEEP_SECONDS = 5 * 60
+
 
 class ConnectionRegistry:
     """One :class:`OdooConnectionManager` per caller identity.
@@ -285,12 +290,19 @@ class ConnectionRegistry:
     their own Odoo session.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        idle_timeout_seconds: float = IDLE_TIMEOUT_SECONDS,
+        sweep_interval_seconds: float = IDLE_SWEEP_SECONDS,
+    ) -> None:
         self._lock = threading.RLock()
         self._managers: dict[str, OdooConnectionManager] = {}
         self._logins: dict[str, threading.Lock] = {}
         self._last_used: dict[str, float] = {}
         self._credentials: Callable[[str], dict[str, Any] | None] | None = None
+        self._idle_timeout = idle_timeout_seconds
+        self._sweep_interval = sweep_interval_seconds
+        self._last_sweep = time.monotonic()
 
     def set_credential_provider(
         self,
@@ -322,6 +334,7 @@ class ConnectionRegistry:
             login_lock = self._logins[identity]
             provider = self._credentials
             self._last_used[identity] = time.monotonic()
+            self._sweep_if_due()
 
         if provider is None:
             return manager
@@ -336,6 +349,23 @@ class ConnectionRegistry:
                     manager.connect(**credentials)
                     logger.info("Opened Odoo session for %s", identity)
         return manager
+
+    def _sweep_if_due(self) -> None:
+        """Drop idle sessions on the way past, at most once per sweep interval.
+
+        Done here rather than from a background task on purpose: a task started
+        inside the server lifespan has to be torn down through a cancel scope,
+        and getting that wrong turns any startup error into an unrelated
+        traceback about cancel scopes. Sweeping opportunistically needs no task
+        at all, and works the same under every transport.
+        """
+        now = time.monotonic()
+        if now - self._last_sweep < self._sweep_interval:
+            return
+        self._last_sweep = now
+        released = self.release_idle(self._idle_timeout)
+        if released:
+            logger.info("Released %d idle Odoo connection(s)", len(released))
 
     def release_idle(self, max_idle_seconds: float) -> list[str]:
         """Disconnect identities untouched for ``max_idle_seconds``.

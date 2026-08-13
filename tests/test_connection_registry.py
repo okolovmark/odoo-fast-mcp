@@ -64,6 +64,23 @@ def test_default_identity_survives_the_sweep(registry):
     assert registry.identities == [DEFAULT_IDENTITY]
 
 
+def test_idle_sessions_are_swept_without_a_background_task():
+    # The sweep rides along with ordinary lookups, so it must actually fire.
+    reg = ConnectionRegistry(idle_timeout_seconds=0, sweep_interval_seconds=0)
+    reg.get("alice@example.com")
+    reg.get("bob@example.com")
+    assert "alice@example.com" not in reg.identities
+    reg.shutdown()
+
+
+def test_sweeping_holds_off_between_intervals():
+    reg = ConnectionRegistry(idle_timeout_seconds=0, sweep_interval_seconds=3600)
+    reg.get("alice@example.com")
+    reg.get("bob@example.com")
+    assert sorted(reg.identities) == ["alice@example.com", "bob@example.com"]
+    reg.shutdown()
+
+
 def test_busy_identities_are_kept(registry):
     registry.get("alice@example.com")
     assert registry.release_idle(max_idle_seconds=3600) == []

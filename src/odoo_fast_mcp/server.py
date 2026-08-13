@@ -14,6 +14,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from functools import partial
+from typing import Any
 
 import anyio
 import odoorpc
@@ -26,38 +27,27 @@ from odoo_fast_mcp.prompts import register_prompts
 
 logger = logging.getLogger(__name__)
 
-# A shared deployment accumulates one Odoo session per person who ever called it;
-# drop the ones nobody is using rather than hold them until restart.
-IDLE_TIMEOUT_SECONDS = 30 * 60
-IDLE_SWEEP_SECONDS = 5 * 60
-
 
 # =============================================================================
 # Lifespan and Middleware
 # =============================================================================
 
 
-async def _sweep_idle_connections() -> None:
-    """Disconnect per-identity sessions that have gone quiet."""
-    while True:
-        await anyio.sleep(IDLE_SWEEP_SECONDS)
-        released = registry.release_idle(IDLE_TIMEOUT_SECONDS)
-        if released:
-            logger.info("Released %d idle Odoo connection(s)", len(released))
-
-
 @asynccontextmanager
 async def lifespan(mcp: FastMCP):
-    """Lifespan manager for the MCP server."""
+    """Lifespan manager for the MCP server.
+
+    Deliberately free of background tasks: idle connections are swept by the
+    registry itself, so nothing here has to survive being entered and exited in
+    different tasks — a startup failure then reports the failure rather than a
+    cancel-scope error raised while unwinding.
+    """
     logger.info("Starting Odoo FastMCP server...")
-    async with anyio.create_task_group() as tg:
-        tg.start_soon(_sweep_idle_connections)
-        try:
-            yield {"odoo_manager": odoo_manager}
-        finally:
-            logger.info("Shutting down Odoo FastMCP server...")
-            registry.shutdown()
-            tg.cancel_scope.cancel()
+    try:
+        yield {"odoo_manager": odoo_manager}
+    finally:
+        logger.info("Shutting down Odoo FastMCP server...")
+        registry.shutdown()
 
 
 class LoggingMiddleware(Middleware):
@@ -119,6 +109,47 @@ import odoo_fast_mcp.tools  # noqa: E402, F401
 # =============================================================================
 
 
+def _enable_odoo_auth(config: dict[str, Any]) -> None:
+    """Make every caller sign in as themselves, with Odoo deciding who they are.
+
+    Turning this on replaces the server's single env-credential session: the
+    connection registry is fed from each person's own stored credential, so what
+    they may do in Odoo is whatever Odoo already grants their user.
+    """
+    from odoo_fast_mcp.auth import CredentialStore
+    from odoo_fast_mcp.auth.provider import OdooAuthProvider, OdooTarget
+    from odoo_fast_mcp.auth.store import OAuthStore
+
+    missing = [
+        name
+        for name, value in (
+            ("MCP_BASE_URL", config["base_url"]),
+            ("MCP_CREDENTIAL_KEY", config["credential_key"]),
+            ("ODOO_DATABASE", config["database"]),
+        )
+        if not value
+    ]
+    if missing:
+        msg = f"MCP_AUTH=odoo needs {', '.join(missing)}"
+        raise SystemExit(msg)
+
+    odoo_host, odoo_port, protocol = parse_odoo_url(config["odoo_url"])
+    provider = OdooAuthProvider(
+        base_url=config["base_url"],
+        target=OdooTarget(
+            host=odoo_host,
+            database=config["database"],
+            port=odoo_port,
+            protocol=protocol,
+        ),
+        oauth_store=OAuthStore(config["state_db"]),
+        credential_store=CredentialStore(config["state_db"], config["credential_key"]),
+    )
+    mcp.auth = provider
+    registry.set_credential_provider(provider.credential_provider)
+    logger.info("Authentication enabled: callers sign in with their own Odoo login")
+
+
 async def _main_async(
     env_path: str | None = None,
     transport: str = "stdio",
@@ -133,8 +164,15 @@ async def _main_async(
     host = os.getenv("MCP_HOST", host)
     port = int(os.getenv("MCP_PORT", str(port)))
 
-    # Auto-connect if config has credentials
-    if all(config.get(k) for k in ["odoo_url", "database", "username", "password"]):
+    authenticated = config["auth"] == "odoo"
+    if authenticated:
+        _enable_odoo_auth(config)
+
+    # Auto-connect if config has credentials. Skipped under authentication: a
+    # shared server should hold no session that isn't somebody's own.
+    if not authenticated and all(
+        config.get(k) for k in ["odoo_url", "database", "username", "password"]
+    ):
         try:
             odoo_host, odoo_port, protocol = parse_odoo_url(config["odoo_url"])
 
@@ -203,4 +241,12 @@ def main_cli() -> None:
 
 
 if __name__ == "__main__":
-    main_cli()
+    # `python -m odoo_fast_mcp.server` loads this file twice: once as __main__,
+    # and again as odoo_fast_mcp.server when the tool modules import it back.
+    # Each copy builds its own FastMCP instance, and the tools register on the
+    # imported one — so running __main__'s instance would serve a server with no
+    # tools at all, with nothing in the log to say why. Hand over to the copy the
+    # tools attached themselves to.
+    from odoo_fast_mcp.server import main_cli as _registered_main_cli
+
+    _registered_main_cli()

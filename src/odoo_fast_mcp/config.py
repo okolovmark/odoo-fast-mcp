@@ -16,6 +16,12 @@ def load_config(env_path: str | None = None) -> dict[str, Any]:
         ODOO_USERNAME: Username for authentication
         ODOO_PASSWORD: Password for authentication
         ODOO_TIMEOUT: Connection timeout in seconds (default: 30)
+
+    Multi-user HTTP deployments additionally read:
+        MCP_AUTH: set to "odoo" to make callers sign in with their own Odoo login
+        MCP_BASE_URL: the server's public URL, used in OAuth metadata and redirects
+        MCP_STATE_DB: where credentials and OAuth state live (default: ./mcp-state.db)
+        MCP_CREDENTIAL_KEY: Fernet key encrypting stored Odoo secrets
     """
     # Load .env file if it exists
     path = Path(env_path) if env_path else Path(".env")
@@ -30,6 +36,10 @@ def load_config(env_path: str | None = None) -> dict[str, Any]:
         "username": os.getenv("ODOO_USERNAME", "admin"),
         "password": os.getenv("ODOO_PASSWORD", "admin"),
         "timeout": int(os.getenv("ODOO_TIMEOUT", "30")),
+        "auth": os.getenv("MCP_AUTH", "").strip().lower(),
+        "base_url": os.getenv("MCP_BASE_URL", ""),
+        "state_db": os.getenv("MCP_STATE_DB", "mcp-state.db"),
+        "credential_key": os.getenv("MCP_CREDENTIAL_KEY", ""),
     }
 
 
