@@ -21,10 +21,15 @@ from fastmcp import FastMCP
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 
 from odoo_fast_mcp.config import load_config, parse_odoo_url
-from odoo_fast_mcp.connection import odoo_manager
+from odoo_fast_mcp.connection import odoo_manager, registry
 from odoo_fast_mcp.prompts import register_prompts
 
 logger = logging.getLogger(__name__)
+
+# A shared deployment accumulates one Odoo session per person who ever called it;
+# drop the ones nobody is using rather than hold them until restart.
+IDLE_TIMEOUT_SECONDS = 30 * 60
+IDLE_SWEEP_SECONDS = 5 * 60
 
 
 # =============================================================================
@@ -32,13 +37,27 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
+async def _sweep_idle_connections() -> None:
+    """Disconnect per-identity sessions that have gone quiet."""
+    while True:
+        await anyio.sleep(IDLE_SWEEP_SECONDS)
+        released = registry.release_idle(IDLE_TIMEOUT_SECONDS)
+        if released:
+            logger.info("Released %d idle Odoo connection(s)", len(released))
+
+
 @asynccontextmanager
 async def lifespan(mcp: FastMCP):
     """Lifespan manager for the MCP server."""
     logger.info("Starting Odoo FastMCP server...")
-    yield {"odoo_manager": odoo_manager}
-    logger.info("Shutting down Odoo FastMCP server...")
-    odoo_manager.disconnect()
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(_sweep_idle_connections)
+        try:
+            yield {"odoo_manager": odoo_manager}
+        finally:
+            logger.info("Shutting down Odoo FastMCP server...")
+            registry.shutdown()
+            tg.cancel_scope.cancel()
 
 
 class LoggingMiddleware(Middleware):

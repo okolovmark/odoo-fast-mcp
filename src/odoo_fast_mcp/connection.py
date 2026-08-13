@@ -1,9 +1,13 @@
 """Odoo connection manager with thread-safe operations."""
 
+import logging
 import threading
-from typing import Any
+import time
+from typing import Any, cast
 
 import odoorpc
+
+logger = logging.getLogger(__name__)
 
 
 class OdooConnectionManager:
@@ -266,5 +270,114 @@ class OdooConnectionManager:
         return self.odoo.execute(model, "name_search", name, args, operator, limit)
 
 
-# Global connection manager instance
-odoo_manager = OdooConnectionManager()
+DEFAULT_IDENTITY = "default"
+
+
+class ConnectionRegistry:
+    """One :class:`OdooConnectionManager` per caller identity.
+
+    Over stdio the server belongs to a single person and one connection is the
+    whole story. Over HTTP the same process serves the whole organisation, and a
+    single shared connection would make every record land under whichever
+    account the server was started with — the Odoo audit trail would name the
+    server, not the person who asked. Keying by identity keeps each caller on
+    their own Odoo session.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.RLock()
+        self._managers: dict[str, OdooConnectionManager] = {}
+        self._last_used: dict[str, float] = {}
+
+    def get(self, identity: str) -> OdooConnectionManager:
+        """Return this identity's manager, creating an unconnected one if new."""
+        with self._lock:
+            manager = self._managers.get(identity)
+            if manager is None:
+                manager = OdooConnectionManager()
+                self._managers[identity] = manager
+            self._last_used[identity] = time.monotonic()
+            return manager
+
+    def release_idle(self, max_idle_seconds: float) -> list[str]:
+        """Disconnect identities untouched for ``max_idle_seconds``.
+
+        Long-lived sessions are the cost of a shared deployment: without this,
+        everyone who ran one query in the morning still holds an Odoo session at
+        midnight. ``DEFAULT_IDENTITY`` is exempt — it is the stdio/env-credential
+        connection, and nothing would re-establish it.
+        """
+        cutoff = time.monotonic() - max_idle_seconds
+        with self._lock:
+            stale = [
+                identity
+                for identity, last_used in self._last_used.items()
+                if last_used < cutoff and identity != DEFAULT_IDENTITY
+            ]
+            for identity in stale:
+                self._managers.pop(identity).disconnect()
+                del self._last_used[identity]
+            return stale
+
+    def shutdown(self) -> None:
+        """Disconnect every identity. Called once on server shutdown."""
+        with self._lock:
+            for manager in self._managers.values():
+                manager.disconnect()
+            self._managers.clear()
+            self._last_used.clear()
+
+    @property
+    def identities(self) -> list[str]:
+        with self._lock:
+            return sorted(self._managers)
+
+
+registry = ConnectionRegistry()
+
+
+def current_identity() -> str:
+    """Identity of the caller currently being served.
+
+    Reads the authenticated subject from the access token when the server runs
+    behind an auth provider. Everything else — stdio, an unauthenticated HTTP
+    deployment, code called outside a request — shares ``DEFAULT_IDENTITY``, so
+    the single-user behaviour is exactly what it was before identities existed.
+
+    fastmcp is imported lazily: this module is otherwise transport-agnostic and
+    stays importable (and testable) without a server context.
+
+    A failure to *read* a token is deliberately not caught. Once auth is
+    configured, falling back to the default identity would hand the caller the
+    server's own env-credential connection — a broken token must fail the
+    request, not quietly upgrade it.
+    """
+    try:
+        from fastmcp.server.dependencies import get_access_token
+    except ImportError:  # used as a library, without the server extras
+        return DEFAULT_IDENTITY
+
+    token = get_access_token()
+    if token is None:  # no auth provider, or no request in flight
+        return DEFAULT_IDENTITY
+    return token.subject or token.client_id or DEFAULT_IDENTITY
+
+
+class _CurrentManager:
+    """Module-level stand-in that resolves to the calling identity's manager.
+
+    Tool modules bind ``odoo_manager`` once at import time, so the object they
+    hold must stay the same forever while the connection behind it changes from
+    request to request. Forwarding attribute access keeps all ~40 call sites —
+    and the stdio path — untouched by the move to per-identity connections.
+    """
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(registry.get(current_identity()), name)
+
+    def __repr__(self) -> str:
+        return f"<odoo_manager identity={current_identity()!r}>"
+
+
+# Global entry point: looks like one manager, resolves to the caller's own.
+odoo_manager: OdooConnectionManager = cast("OdooConnectionManager", _CurrentManager())
