@@ -12,7 +12,7 @@ Provides comprehensive tools for interacting with Odoo ERP:
 import argparse
 import logging
 import os
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from functools import partial
 from typing import Any
 
@@ -59,6 +59,33 @@ class LoggingMiddleware(Middleware):
         result = await call_next(context)
         logger.debug("Completed %s", context.method)
         return result
+
+
+# What the server tells a model about itself once callers sign in. The default
+# instructions open with "use connect first", which is exactly wrong here.
+AUTHENTICATED_INSTRUCTIONS = """
+    This server provides tools to interact with an Odoo ERP system via OdooRPC.
+
+    ## Getting Started
+    You are already connected, as the Odoo user who signed in — there is no
+    connect step and no credentials to supply. `get_connection_status` reports
+    who that is. Everything you do is done as that user and is subject to their
+    Odoo permissions; an AccessError means their account lacks the right, so
+    report it rather than working around it.
+
+    ## Available Operations
+    - **Read**: search, read, search_read, search_count, name_search
+    - **Write**: create, write (update), unlink (delete)
+    - **Meta**: get_model_fields, list_models, get_server_version
+    - **Advanced**: execute (call any model method), get_report
+
+    ## Domain Syntax
+    Domains are lists of conditions: [('field', 'operator', 'value')]
+    Common operators: =, !=, >, >=, <, <=, like, ilike, in, not in
+    Combine with '&' (AND), '|' (OR), '!' (NOT)
+
+    Example: [['active', '=', true], ['name', 'ilike', 'test']]
+"""
 
 
 # =============================================================================
@@ -147,6 +174,21 @@ def _enable_odoo_auth(config: dict[str, Any]) -> None:
     )
     mcp.auth = provider
     registry.set_credential_provider(provider.credential_provider)
+
+    # The connection-management tools are wrong here, and worse than useless.
+    # `connect` reads credentials from the environment — deliberately absent in
+    # this mode — so a model following the default instructions calls it, gets a
+    # KeyError, and shows the person an error before carrying on to work fine.
+    # It would also let a caller point their session at any host they name, which
+    # a shared, internet-facing server has no business offering. The session is
+    # opened from the caller's own stored credential; there is nothing to connect.
+    # `get_connection_status` stays: it answers "am I in, and as whom".
+    for tool in ("connect", "disconnect", "list_databases"):
+        # Already withdrawn is fine: enabling auth twice must not fail.
+        with suppress(KeyError):
+            mcp.local_provider.remove_tool(tool)
+
+    mcp.instructions = AUTHENTICATED_INSTRUCTIONS
     logger.info("Authentication enabled: callers sign in with their own Odoo login")
 
 
