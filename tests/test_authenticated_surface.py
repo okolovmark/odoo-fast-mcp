@@ -8,6 +8,10 @@ production; these tests are why it should not come back.
 """
 
 import asyncio
+import json
+import os
+import subprocess
+import sys
 
 import pytest
 from cryptography.fernet import Fernet
@@ -70,3 +74,48 @@ def test_the_credential_provider_is_wired_to_the_registry(authenticated_server):
     # Without this the registry hands out unconnected managers and every tool
     # call fails with "Not connected to Odoo".
     assert authenticated_server.registry._credentials is not None
+
+
+def _stdio_tool_names() -> set[str]:
+    """Tool names a plain stdio server publishes, in a process of its own.
+
+    Spawned rather than inspected in-process: the FastMCP instance is
+    module-level, and a test that ran with authentication on has already
+    withdrawn tools from it.
+    """
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("MCP_", "ODOO_"))}
+    process = subprocess.Popen(
+        [sys.executable, "-m", "odoo_fast_mcp.server", "--transport", "stdio"],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        text=True, bufsize=1, env=env,
+    )
+
+    def send(payload):
+        process.stdin.write(json.dumps(payload) + "\n")
+        process.stdin.flush()
+
+    def read():
+        while line := process.stdout.readline():
+            if line.strip().startswith("{"):
+                return json.loads(line)
+        return None
+
+    try:
+        send({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+              "params": {"protocolVersion": "2025-06-18", "capabilities": {},
+                         "clientInfo": {"name": "t", "version": "0"}}})
+        read()
+        send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        send({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
+        return {tool["name"] for tool in read()["result"]["tools"]}
+    finally:
+        process.terminate()
+        process.wait(timeout=15)
+
+
+def test_local_use_keeps_the_connection_tools():
+    # Withdrawing them is a property of authenticated mode, not of the server.
+    # Over stdio the process belongs to one person, their credentials are their
+    # own, and moving between databases — connect(env_profile="prod") — is the
+    # point of the tool.
+    assert {"connect", "disconnect", "list_databases"} <= _stdio_tool_names()
