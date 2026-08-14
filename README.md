@@ -10,6 +10,7 @@ A Model Context Protocol (MCP) server for Odoo 16+ using OdooRPC. This server en
 - **Method Execution**: Call any Odoo model method (workflow actions, custom methods)
 - **Report Generation**: Generate and download Odoo reports (PDF)
 - **MCP Resources**: Access connection status and model info as MCP resources
+- **Multi-user mode**: OAuth sign-in with each caller's own Odoo login, one session per person
 
 ## Usage 📚
 
@@ -242,6 +243,70 @@ When using HTTP transport, configure your MCP client to connect via URL instead 
     "url": "http://localhost:8000/mcp"
 }
 ```
+
+## Multi-user mode (OAuth) 🔐
+
+By default the server holds one Odoo session, from the credentials in its
+environment — right for stdio, where the process belongs to one person. A server
+reachable by a team needs the opposite: every caller reaching Odoo **as
+themselves**, so that a record written through the MCP is attributed to the
+person who asked for it and not to a shared account.
+
+Odoo offers no impersonation over RPC, so each person signs in once with their
+own Odoo login and an **API key**, which is verified against Odoo, encrypted and
+kept. From then on the server opens a separate Odoo session per identity,
+reconnecting silently when one expires and dropping sessions that go idle.
+
+The server acts as an OAuth 2.1 authorization server whose identity provider is
+Odoo itself. It serves discovery metadata, accepts dynamic client registration
+and enforces PKCE, so an MCP client can connect with no configuration beyond the
+URL.
+
+```bash
+MCP_AUTH=odoo
+MCP_BASE_URL=https://mcp.example.com        # exactly as clients reach it
+MCP_CREDENTIAL_KEY=<Fernet key>             # encrypts stored Odoo API keys
+MCP_STATE_DB=/var/lib/odoo-mcp/state.db     # credentials, clients, tokens
+
+ODOO_URL=https://odoo.example.com
+ODOO_DATABASE=mydb
+# ODOO_USERNAME / ODOO_PASSWORD deliberately unset — see below
+```
+
+Generate the encryption key once and keep it safe:
+
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Then run the server as usual with `--transport http`. Notes worth knowing:
+
+- **`MCP_BASE_URL` must equal the public URL exactly.** It is published in the
+  OAuth metadata and used to build the sign-in redirect; a mismatch fails in ways
+  that are hard to read.
+- **The startup auto-connect is skipped** while `MCP_AUTH=odoo` is set. A shared
+  server should hold no Odoo session that is not somebody's own, so leave
+  `ODOO_USERNAME` / `ODOO_PASSWORD` unset.
+- **Back up `MCP_CREDENTIAL_KEY` and the state database.** Lose the key and every
+  stored API key becomes undecryptable; lose the database and everyone signs in
+  again and re-adds the server.
+- **Behind a reverse proxy**, turn buffering off and raise the read timeout —
+  streamable HTTP holds a response open and streams events down it. And do not
+  send a `form-action` CSP: it governs the whole redirect chain after a form
+  submission, so it silently blocks the last hop of sign-in, back to the client's
+  callback.
+
+### Adding it to Claude on the web
+
+In claude.ai, **Settings → Connectors → Add custom connector**, with the URL
+`https://mcp.example.com/mcp`. Leave the OAuth client fields empty — the server
+registers clients dynamically. On Team and Enterprise plans only an Owner can add
+a connector for the organization; each person then presses **Connect** and signs
+in with their own Odoo login and API key. An Odoo API key is created under
+**Preferences → Account Security**, and can be revoked there at any time.
+
+Claude connects from Anthropic's cloud, so the server must be reachable over the
+public internet (or have those addresses allowed through the firewall).
 
 ## Known Limitations ⚠️
 
