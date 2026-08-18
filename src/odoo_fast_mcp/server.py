@@ -20,12 +20,19 @@ import anyio
 import odoorpc
 from fastmcp import FastMCP
 from fastmcp.server.middleware import Middleware, MiddlewareContext
+from mcp.types import Icon
 
 from odoo_fast_mcp.config import load_config, parse_odoo_url
 from odoo_fast_mcp.connection import odoo_manager, registry
 from odoo_fast_mcp.prompts import register_prompts
 
 logger = logging.getLogger(__name__)
+
+# Catalog metadata surfaced to clients and registries in the `initialize`
+# response. The icon is served from the default branch rather than inlined as a
+# data URI so `initialize` stays small; it moves with the repository.
+PROJECT_URL = "https://github.com/okolovmark/odoo-fast-mcp"
+RAW_CONTENT_URL = "https://raw.githubusercontent.com/okolovmark/odoo-fast-mcp/main"
 
 
 # =============================================================================
@@ -95,6 +102,14 @@ AUTHENTICATED_INSTRUCTIONS = """
 
 mcp: FastMCP = FastMCP(
     name="Odoo Fast MCP",
+    website_url=PROJECT_URL,
+    icons=[
+        Icon(
+            src=f"{RAW_CONTENT_URL}/assets/icon.svg",
+            mimeType="image/svg+xml",
+            sizes=["any"],
+        ),
+    ],
     instructions="""
         This server provides tools to interact with Odoo ERP systems via OdooRPC.
 

@@ -12,6 +12,7 @@ def register_prompts(mcp: FastMCP) -> None:
     """Register all Odoo workflow prompts on the MCP server instance."""
 
     @mcp.prompt(
+        title="Analyze an Odoo Model",
         description="Full analysis of an Odoo model: fields, relations, and record count.",
     )
     def analyze_model(model: str) -> str:
@@ -38,6 +39,7 @@ def register_prompts(mcp: FastMCP) -> None:
         )
 
     @mcp.prompt(
+        title="Audit Record Data Quality",
         description="Audit records in an Odoo model for data quality issues.",
     )
     def audit_records(model: str, domain: str = "[]") -> str:
@@ -71,6 +73,7 @@ def register_prompts(mcp: FastMCP) -> None:
         )
 
     @mcp.prompt(
+        title="Explore Model Data",
         description="Sample and summarize data in an Odoo model for quick exploration.",
     )
     def explore_data(
@@ -112,6 +115,7 @@ def register_prompts(mcp: FastMCP) -> None:
         )
 
     @mcp.prompt(
+        title="Compare Two Odoo Models",
         description="Compare the structure of two Odoo models side by side.",
     )
     def compare_models(model_a: str, model_b: str) -> str:

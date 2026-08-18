@@ -8,7 +8,7 @@ from odoo_fast_mcp.connection import odoo_manager
 from odoo_fast_mcp.server import mcp
 
 
-@mcp.resource("odoo://status")
+@mcp.resource("odoo://status", title="Odoo Connection Status")
 async def get_status() -> dict[str, Any]:
     """Get current Odoo connection status."""
     if not odoo_manager.is_connected:
@@ -27,7 +27,7 @@ async def get_status() -> dict[str, Any]:
     return await to_thread.run_sync(_get_info)
 
 
-@mcp.resource("odoo://models")
+@mcp.resource("odoo://models", title="Odoo Models")
 async def get_models_resource() -> list[dict[str, Any]]:
     """List all available Odoo models as a resource."""
     if not odoo_manager.is_connected:
@@ -35,7 +35,7 @@ async def get_models_resource() -> list[dict[str, Any]]:
     return await to_thread.run_sync(lambda: odoo_manager.list_models())
 
 
-@mcp.resource("odoo://model/{model_name}/fields")
+@mcp.resource("odoo://model/{model_name}/fields", title="Odoo Model Fields")
 async def get_model_fields_resource(model_name: str) -> dict[str, Any]:
     """Get field definitions for a specific model."""
     if not odoo_manager.is_connected:
