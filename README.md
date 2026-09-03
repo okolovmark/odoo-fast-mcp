@@ -70,9 +70,9 @@ in other project you can use it like this:
 
 | Tool     | Description                    |
 | -------- | ------------------------------ |
-| `create` | Create a new record in a model |
-| `write`  | Update existing records        |
-| `unlink` | Delete records (destructive)   |
+| `create` | Create a new record in a model            |
+| `write`  | Update existing records (destructive)     |
+| `unlink` | Delete records (destructive)              |
 
 ### Metadata Tools
 
@@ -85,7 +85,7 @@ in other project you can use it like this:
 
 | Tool         | Description                             |
 | ------------ | --------------------------------------- |
-| `execute`    | Execute any method on an Odoo model     |
+| `execute`    | Execute any method on an Odoo model (destructive) |
 | `get_report` | Generate and save an Odoo report as PDF |
 
 ### Record links

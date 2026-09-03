@@ -299,8 +299,8 @@ async def create(
     annotations={
         "title": "Update Records",
         "readOnlyHint": False,
-        "destructiveHint": False,
-        "idempotentHint": True,
+        "destructiveHint": True,
+        "idempotentHint": False,
         "openWorldHint": False,
     },
 )
@@ -321,6 +321,13 @@ async def write(
 
     Modifies the specified fields on all records matching the given IDs.
     Returns True on success.
+
+    The old value is gone — no undo — so confirm before overwriting a field
+    the person did not ask you to change, and read the record first if you
+    need to know what you are replacing.
+
+    Not safe to retry blindly: x2many values are command lists, and
+    `{"order_line": [[0, 0, {...}]]}` appends another line on every call.
     """
     parsed_ids = json.loads(ids)
     parsed_values = json.loads(values)

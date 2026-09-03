@@ -33,10 +33,18 @@ def authenticated_server(tmp_path, monkeypatch):
         monkeypatch.setenv(name, value)
 
     original_instructions = server.mcp.instructions
+    # Withdrawal happens on the module-level server, so without putting the
+    # tools back this fixture decides what every later test file sees.
+    withdrawn = [
+        asyncio.run(server.mcp.local_provider.get_tool(name))
+        for name in ("connect", "disconnect", "list_databases")
+    ]
     server._enable_odoo_auth(server.load_config(None))
     yield server
     # The server object is module-level and shared across tests.
     server.mcp.instructions = original_instructions
+    for tool in withdrawn:
+        server.mcp.local_provider.add_tool(tool)
     server.registry.set_credential_provider(None)
     server.mcp.auth = None
 

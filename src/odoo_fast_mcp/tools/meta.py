@@ -70,7 +70,7 @@ async def list_models(
         "readOnlyHint": False,
         "destructiveHint": True,
         "idempotentHint": False,
-        "openWorldHint": False,
+        "openWorldHint": True,
     },
 )
 async def execute(

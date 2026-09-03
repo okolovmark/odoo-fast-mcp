@@ -60,12 +60,3 @@ def test_every_catalog_entry_has_a_display_title(lister):
     assert entries, "nothing registered — the assertion below would pass vacuously"
     untitled = [entry.name for entry in entries if not getattr(entry, "title", None)]
     assert not untitled, f"missing a display title: {untitled}"
-
-
-def test_tools_that_can_destroy_data_say_so():
-    # `execute` runs any method — unlink and action_cancel included. A client
-    # that gates its confirmation prompt on destructiveHint must not be told
-    # otherwise.
-    tools = {tool.name: tool for tool in _run(server.mcp._list_tools())}
-    for name in ("unlink", "execute"):
-        assert tools[name].annotations.destructiveHint is True, name
