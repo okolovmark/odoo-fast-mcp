@@ -61,6 +61,18 @@ def parse_odoo_url(url: str) -> tuple[str, int, str]:
     return host, port, protocol
 
 
+def web_base_url(host: str, port: int, protocol: str) -> str:
+    """Inverse of :func:`parse_odoo_url`: the origin a browser opens for this connection.
+
+    Drops the port when it is the scheme's default, so links read the way
+    people type them (``https://odoo.example.com``, not ``:443``).
+    """
+    scheme = "https" if protocol.endswith("+ssl") else "http"
+    default_port = 443 if scheme == "https" else 80
+    netloc = host if port == default_port else f"{host}:{port}"
+    return f"{scheme}://{netloc}"
+
+
 def load_profile(profile: str = "default") -> dict[str, Any]:
     """Load connection settings for a named env-suffix profile.
 

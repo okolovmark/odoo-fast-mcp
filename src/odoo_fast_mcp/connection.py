@@ -8,6 +8,8 @@ from typing import Any, cast
 
 import odoorpc
 
+from odoo_fast_mcp.config import web_base_url
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,6 +24,7 @@ class OdooConnectionManager:
         self._lock = threading.RLock()
         self._odoo: odoorpc.ODOO | None = None
         self._connected: bool = False
+        self._web_url: str | None = None
 
     @property
     def odoo(self) -> odoorpc.ODOO:
@@ -37,6 +40,19 @@ class OdooConnectionManager:
         """Check if connected to Odoo."""
         with self._lock:
             return self._connected and self._odoo is not None
+
+    @property
+    def web_url(self) -> str:
+        """Origin of the connected Odoo's web client — the base for links people open.
+
+        Derived from the RPC connection, so it follows ``connect(env_profile=...)``
+        between databases without any extra configuration.
+        """
+        with self._lock:
+            if not self._connected or self._web_url is None:
+                msg = "Not connected to Odoo. Use 'connect' tool first."
+                raise ConnectionError(msg)
+            return self._web_url
 
     def connect(
         self,
@@ -62,10 +78,12 @@ class OdooConnectionManager:
                     new_odoo.login(database, username, password)
                     self._odoo = new_odoo
                     self._connected = True
+                    self._web_url = web_base_url(host, port, protocol)
                     return {
                         "status": "connected",
                         "host": host,
                         "port": port,
+                        "web_url": self._web_url,
                         "database": database,
                         "user": self.get_user_info()["name"],
                         "uid": self._odoo.env.uid,
@@ -109,6 +127,7 @@ class OdooConnectionManager:
             if self._odoo:
                 self._odoo = None
             self._connected = False
+            self._web_url = None
             return {"status": "disconnected"}
 
     def list_databases(self, host: str, port: int = 8069, protocol: str = "jsonrpc") -> list[str]:

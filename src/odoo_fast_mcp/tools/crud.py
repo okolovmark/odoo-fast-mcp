@@ -10,6 +10,40 @@ from odoo_fast_mcp.connection import odoo_manager
 from odoo_fast_mcp.server import mcp
 
 # =============================================================================
+# Record links
+# =============================================================================
+
+
+def _record_url(base: str, model: str, record_id: int) -> str:
+    """Form view of one record in the Odoo web client.
+
+    The hash-router form Odoo 16 uses; 17+ redirects it to ``/odoo/<model>/<id>``.
+    """
+    return f"{base}/web#id={record_id}&model={model}&view_type=form"
+
+
+def _with_urls(records: list[dict[str, Any]], model: str) -> list[dict[str, Any]]:
+    """Attach ``_url`` to every record.
+
+    The agent reads the fields; the person who asked opens the link. A record
+    they can look at in Odoo beats a paraphrase they have to trust, and it costs
+    one short string per row. ``_url`` sits outside the field namespace: no
+    Odoo model declares a field with a leading underscore (that prefix is the
+    ORM's own, cf. ``__last_update``), and custom fields must start with ``x_``.
+    """
+    base = odoo_manager.web_url  # one identity lookup, not one per record
+    for record in records:
+        record["_url"] = _record_url(base, model, record["id"])
+    return records
+
+
+WITH_URL_DESCRIPTION = (
+    "Attach `_url` — the record's form view in the Odoo web client — to each "
+    "record. Turn off for bulk pulls nobody will click."
+)
+
+
+# =============================================================================
 # Read Tools
 # =============================================================================
 
@@ -76,16 +110,20 @@ async def read(
             "None returns all fields.",
         ),
     ] = None,
+    with_url: Annotated[bool, Field(description=WITH_URL_DESCRIPTION)] = True,
 ) -> list[dict[str, Any]]:
     """Read specific records by their IDs.
 
-    Returns full record data for the specified IDs.
+    Returns full record data for the specified IDs. Each record carries `_url`,
+    its form view in the Odoo web client — quote it so the person can open the
+    record and check for themselves.
     """
     parsed_ids = json.loads(ids)
     parsed_fields = json.loads(fields) if fields else None
-    return await to_thread.run_sync(
+    records = await to_thread.run_sync(
         lambda: odoo_manager.read(model=model, ids=parsed_ids, fields=parsed_fields),
     )
+    return _with_urls(records, model) if with_url else records
 
 
 @mcp.tool(
@@ -122,11 +160,13 @@ async def search_read(
     order: Annotated[
         str | None, Field(description="Sort order, e.g., 'create_date desc'"),
     ] = None,
+    with_url: Annotated[bool, Field(description=WITH_URL_DESCRIPTION)] = True,
 ) -> list[dict[str, Any]]:
     """Search for records and return their data in a single operation.
 
     This is the most efficient way to query Odoo data. Combines search and read
-    into one RPC call.
+    into one RPC call. Each record carries `_url`, its form view in the Odoo web
+    client — quote it so the person can open the record and check for themselves.
 
     ## Domain Examples:
     - All active partners: [["active", "=", true]]
@@ -136,7 +176,7 @@ async def search_read(
     """
     parsed_domain = json.loads(domain)
     parsed_fields = json.loads(fields) if fields else None
-    return await to_thread.run_sync(
+    records = await to_thread.run_sync(
         lambda: odoo_manager.search_read(
             model=model,
             domain=parsed_domain,
@@ -146,6 +186,7 @@ async def search_read(
             order=order,
         ),
     )
+    return _with_urls(records, model) if with_url else records
 
 
 @mcp.tool(
@@ -237,19 +278,21 @@ async def create(
             "'{\"name\": \"John Doe\", \"email\": \"john@example.com\"}'",
         ),
     ],
-) -> int:
+) -> dict[str, Any]:
     """Create a new record in the specified model.
 
-    Returns the ID of the newly created record.
+    Returns the new record's `id` and `_url` (its form view in the Odoo web
+    client) — show the link so the person can see what was created.
 
     ## Value Examples:
     - Partner: {"name": "John", "email": "john@example.com", "is_company": false}
     - Product: {"name": "Widget", "list_price": 99.99, "type": "product"}
     """
     parsed_values = json.loads(values)
-    return await to_thread.run_sync(
+    record_id = await to_thread.run_sync(
         lambda: odoo_manager.create(model=model, values=parsed_values),
     )
+    return {"id": record_id, "_url": _record_url(odoo_manager.web_url, model, record_id)}
 
 
 @mcp.tool(

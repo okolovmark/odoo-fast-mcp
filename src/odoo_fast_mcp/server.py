@@ -86,6 +86,10 @@ AUTHENTICATED_INSTRUCTIONS = """
     - **Meta**: get_model_fields, list_models, get_server_version
     - **Advanced**: execute (call any model method), get_report
 
+    Records from `read`, `search_read` and `create` carry `_url` — the record in
+    the Odoo web client. Quote it when you report, so the person can open the
+    record and check for themselves.
+
     ## Domain Syntax
     Domains are lists of conditions: [('field', 'operator', 'value')]
     Common operators: =, !=, >, >=, <, <=, like, ilike, in, not in
@@ -127,6 +131,10 @@ mcp: FastMCP = FastMCP(
         - **Write**: create, write (update), unlink (delete)
         - **Meta**: get_model_fields, list_models
         - **Advanced**: execute (call any model method), get_report
+
+        Records from `read`, `search_read` and `create` carry `_url` — the record in
+        the Odoo web client. Quote it when you report, so the person can open the
+        record and check for themselves.
 
         ## Domain Syntax
         Domains are lists of conditions: [('field', 'operator', 'value')]

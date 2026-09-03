@@ -88,6 +88,13 @@ in other project you can use it like this:
 | `execute`    | Execute any method on an Odoo model     |
 | `get_report` | Generate and save an Odoo report as PDF |
 
+### Record links
+
+`read`, `search_read` and `create` add `_url` to every record: its form view in
+the Odoo web client, built from the connection's host, port and protocol. The
+agent gets the fields, the person gets a link they can open to check the record
+for themselves. Pass `with_url=false` to leave it out of bulk pulls.
+
 ## Configuration ⚙️
 
 Create a `.env` file with your Odoo connection details:
