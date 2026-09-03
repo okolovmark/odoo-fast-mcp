@@ -68,7 +68,7 @@ async def list_models(
     annotations={
         "title": "Execute Model Method",
         "readOnlyHint": False,
-        "destructiveHint": False,
+        "destructiveHint": True,
         "idempotentHint": False,
         "openWorldHint": False,
     },
@@ -89,6 +89,10 @@ async def execute(
     ] = "{}",
 ) -> Any:
     """Execute any method on an Odoo model.
+
+    Anything goes through here, `unlink` and `action_cancel` included — so it is
+    flagged destructive. Confirm with the person before running a method that
+    changes data they did not ask you to change.
 
     This is a powerful tool for calling arbitrary model methods like:
     - Workflow actions: action_confirm, action_done, action_cancel
