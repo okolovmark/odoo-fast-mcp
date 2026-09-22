@@ -222,9 +222,14 @@ class OdooConnectionManager:
         model: str,
         attributes: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Get field definitions for a model."""
+        """Get field definitions for a model.
+
+        ``attributes`` is a keyword of ``fields_get``; through ``execute`` it would
+        travel as the second positional argument, and Odoo would iterate the dict's
+        keys as attribute names and return an empty map for every field.
+        """
         attributes = attributes or ["string", "type", "required", "readonly", "help", "relation"]
-        return self.odoo.execute(model, "fields_get", [], {"attributes": attributes})
+        return self.odoo.execute_kw(model, "fields_get", [], {"attributes": attributes})
 
     def list_models(self, filter_installed: bool = True) -> list[dict[str, Any]]:
         """List available models in the system."""
