@@ -301,7 +301,32 @@ Then run the server as usual with `--transport http`. Notes worth knowing:
   streamable HTTP holds a response open and streams events down it. And do not
   send a `form-action` CSP: it governs the whole redirect chain after a form
   submission, so it silently blocks the last hop of sign-in, back to the client's
-  callback.
+  callback. Allow a 20 MB body on `/upload/` (nginx: `client_max_body_size`),
+  and keep the small default everywhere else.
+
+### Attaching files
+
+A tool call carries JSON, so without help a file reaches Odoo only as base64
+the model types out: costly, and one wrong character corrupts it. In this mode
+the server adds `begin_upload(model, res_id, filename, mimetype=None)`. It
+checks that the caller may attach to the record, then returns a one-time link
+and the command that uses it:
+
+```bash
+curl -sS --fail-with-body --data-binary @FILE 'https://mcp.example.com/upload/<ticket>'
+```
+
+The bytes go from the shell straight to the server, which stores them as an
+`ir.attachment` on the record, as the person the link was issued to. A link
+serves one file, expires after 10 minutes, is burnt by its first request and
+takes up to 20 MB. Images are stored as sent, not shrunk the way Odoo shrinks
+uploads over 1920 px, so the `checksum` in the answer equals `sha1sum FILE`. To
+show files in the chatter, post a note with `execute` `message_post` and their
+`attachment_ids`.
+
+The caller needs a shell that can reach the server, as Claude Code has. Over
+stdio there is no `begin_upload`: no HTTP server to send to, and no stored
+credential for a link to act as.
 
 ### Adding it to Claude on the web
 

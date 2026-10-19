@@ -16,6 +16,8 @@ import sys
 import pytest
 from cryptography.fernet import Fernet
 
+from odoo_fast_mcp import uploads
+
 
 @pytest.fixture
 def authenticated_server(tmp_path, monkeypatch):
@@ -45,6 +47,12 @@ def authenticated_server(tmp_path, monkeypatch):
     server.mcp.instructions = original_instructions
     for tool in withdrawn:
         server.mcp.local_provider.add_tool(tool)
+    server.mcp.local_provider.remove_tool("begin_upload")
+    server.mcp._additional_http_routes[:] = [
+        route for route in server.mcp._additional_http_routes
+        if not route.path.startswith(uploads.UPLOAD_PATH)
+    ]
+    uploads._uploads = None
     server.registry.set_credential_provider(None)
     server.mcp.auth = None
 
@@ -67,6 +75,28 @@ def test_the_work_tools_remain(authenticated_server):
 
 def test_status_stays_so_a_caller_can_ask_who_they_are(authenticated_server):
     assert "get_connection_status" in tool_names(authenticated_server)
+
+
+def test_uploads_are_offered_with_the_route_their_links_point_at(authenticated_server):
+    assert "begin_upload" in tool_names(authenticated_server)
+    paths = {route.path for route in authenticated_server.mcp._additional_http_routes}
+    assert f"{uploads.UPLOAD_PATH}/{{ticket}}" in paths
+
+
+def test_upload_hints(authenticated_server):
+    tool = asyncio.run(authenticated_server.mcp.local_provider.get_tool("begin_upload"))
+    hints = tool.annotations
+    # Issues a link; nothing in Odoo changes until a file arrives on it, and
+    # then only by adding an attachment.
+    assert (hints.readOnlyHint, hints.destructiveHint, hints.idempotentHint, hints.openWorldHint) == (
+        False, False, False, False,
+    )
+
+
+def test_enabling_twice_registers_the_route_once(authenticated_server):
+    authenticated_server._enable_odoo_auth(authenticated_server.load_config(None))
+    paths = [route.path for route in authenticated_server.mcp._additional_http_routes]
+    assert paths.count(f"{uploads.UPLOAD_PATH}/{{ticket}}") == 1
 
 
 def test_instructions_no_longer_ask_for_a_connect_step(authenticated_server):
@@ -127,3 +157,10 @@ def test_local_use_keeps_the_connection_tools():
     # own, and moving between databases — connect(env_profile="prod") — is the
     # point of the tool.
     assert {"connect", "disconnect", "list_databases"} <= _stdio_tool_names()
+
+
+def test_local_use_has_no_upload_tool():
+    # A link acts as the person it was issued to through their stored
+    # credential, and over stdio there is neither a credential nor an HTTP
+    # server for the file to go to.
+    assert "begin_upload" not in _stdio_tool_names()

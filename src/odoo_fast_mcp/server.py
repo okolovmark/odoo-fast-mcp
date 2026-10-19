@@ -85,6 +85,7 @@ AUTHENTICATED_INSTRUCTIONS = """
     - **Write**: create, write (update), unlink (delete)
     - **Meta**: get_model_fields, list_models, get_server_version
     - **Advanced**: execute (call any model method), get_report
+    - **Files**: begin_upload (attach a local file to a record without base64)
 
     Records from `read`, `search_read` and `create` carry `_url` — the record in
     the Odoo web client. Quote it when you report, so the person can open the
@@ -169,6 +170,7 @@ def _enable_odoo_auth(config: dict[str, Any]) -> None:
     from odoo_fast_mcp.auth import CredentialStore
     from odoo_fast_mcp.auth.provider import OdooAuthProvider, OdooTarget
     from odoo_fast_mcp.auth.store import OAuthStore
+    from odoo_fast_mcp.uploads import Uploads, enable_uploads
 
     missing = [
         name
@@ -184,6 +186,7 @@ def _enable_odoo_auth(config: dict[str, Any]) -> None:
         raise SystemExit(msg)
 
     odoo_host, odoo_port, protocol = parse_odoo_url(config["odoo_url"])
+    oauth_store = OAuthStore(config["state_db"])
     provider = OdooAuthProvider(
         base_url=config["base_url"],
         target=OdooTarget(
@@ -192,11 +195,16 @@ def _enable_odoo_auth(config: dict[str, Any]) -> None:
             port=odoo_port,
             protocol=protocol,
         ),
-        oauth_store=OAuthStore(config["state_db"]),
+        oauth_store=oauth_store,
         credential_store=CredentialStore(config["state_db"], config["credential_key"]),
     )
     mcp.auth = provider
     registry.set_credential_provider(provider.credential_provider)
+
+    # Files go to Odoo over a link of their own rather than as base64 in a tool
+    # call. The link acts as whoever asked for it, which needs their stored
+    # credential: hence here, and nowhere without sign-in.
+    enable_uploads(mcp, Uploads(oauth_store, config["base_url"]))
 
     # The connection-management tools are wrong here, and worse than useless.
     # `connect` reads credentials from the environment — deliberately absent in

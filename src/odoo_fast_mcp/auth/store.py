@@ -1,4 +1,4 @@
-"""Durable OAuth state: clients, codes, tokens and pending logins.
+"""Durable OAuth state: clients, codes, tokens, pending logins and upload tickets.
 
 Everything here outlives a restart on purpose. A deploy that signed the whole
 organisation out of Claude, or that lost the client registration and forced
@@ -49,6 +49,13 @@ _SCHEMA = (
     """,
     """
     CREATE TABLE IF NOT EXISTS oauth_login (
+        digest     TEXT PRIMARY KEY,
+        data       TEXT NOT NULL,
+        expires_at REAL NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS upload_ticket (
         digest     TEXT PRIMARY KEY,
         data       TEXT NOT NULL,
         expires_at REAL NOT NULL
@@ -118,12 +125,17 @@ class OAuthStore:
         Authorization codes are single-use by specification, and deleting on read
         is what enforces it: a replayed code finds nothing.
         """
-        key = digest(code)
+        return self._take("oauth_code", code)
+
+    def _take(self, table: str, secret: str) -> dict[str, Any] | None:
+        """Read a single-use row and delete it in the same step; None if absent or expired."""
+        key = digest(secret)
         with self._lock, self._connect() as conn:
             row = conn.execute(
-                "SELECT data, expires_at FROM oauth_code WHERE digest = ?", (key,),
+                f"SELECT data, expires_at FROM {table} WHERE digest = ?",  # noqa: S608 - fixed names
+                (key,),
             ).fetchone()
-            conn.execute("DELETE FROM oauth_code WHERE digest = ?", (key,))
+            conn.execute(f"DELETE FROM {table} WHERE digest = ?", (key,))  # noqa: S608
         if row is None or row[1] < time.time():
             return None
         return json.loads(row[0])
@@ -192,6 +204,19 @@ class OAuthStore:
             cursor = conn.execute("DELETE FROM oauth_token WHERE subject = ?", (subject,))
             return cursor.rowcount
 
+    # -- upload tickets ----------------------------------------------------
+
+    def put_upload(self, ticket: str, data: dict[str, Any], expires_at: float) -> None:
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                "INSERT INTO upload_ticket (digest, data, expires_at) VALUES (?, ?, ?)",
+                (digest(ticket), json.dumps(data), expires_at),
+            )
+
+    def take_upload(self, ticket: str) -> dict[str, Any] | None:
+        """Redeem an upload ticket. Single-use like a code: the first request burns it."""
+        return self._take("upload_ticket", ticket)
+
     # -- housekeeping ------------------------------------------------------
 
     def purge_expired(self) -> int:
@@ -199,7 +224,7 @@ class OAuthStore:
         now = time.time()
         with self._lock, self._connect() as conn:
             removed = 0
-            for table in ("oauth_code", "oauth_login"):
+            for table in ("oauth_code", "oauth_login", "upload_ticket"):
                 removed += conn.execute(
                     f"DELETE FROM {table} WHERE expires_at < ?",  # noqa: S608 - fixed names
                     (now,),
