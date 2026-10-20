@@ -24,6 +24,7 @@ EXPECTED = {
     "search_read": (True, False, True, False),
     "search_count": (True, False, True, False),
     "name_search": (True, False, True, False),
+    "read_group": (True, False, True, False),
     "get_model_fields": (True, False, True, False),
     "list_models": (True, False, True, False),
     "get_report": (True, False, True, False),

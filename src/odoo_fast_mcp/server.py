@@ -81,7 +81,8 @@ AUTHENTICATED_INSTRUCTIONS = """
     report it rather than working around it.
 
     ## Available Operations
-    - **Read**: search, read, search_read, search_count, name_search
+    - **Read**: search, read, search_read, search_count, name_search,
+      read_group (counts and totals per group)
     - **Write**: create, write (update), unlink (delete), message_post (log a note)
     - **Meta**: get_model_fields, list_models, get_server_version
     - **Advanced**: execute (call any model method), get_report
@@ -132,7 +133,8 @@ mcp: FastMCP = FastMCP(
 
         ## Available Operations
         - **Connection**: connect, disconnect, list_databases, get_server_version
-        - **Read**: search, read, search_read, search_count, name_search
+        - **Read**: search, read, search_read, search_count, name_search,
+          read_group (counts and totals per group)
         - **Write**: create, write (update), unlink (delete), message_post (log a note)
         - **Meta**: get_model_fields, list_models
         - **Advanced**: execute (call any model method), get_report

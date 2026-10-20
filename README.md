@@ -65,6 +65,7 @@ in other project you can use it like this:
 | `search_read`  | Search and read records in a single operation (recommended) |
 | `search_count` | Count records matching a domain                             |
 | `name_search`  | Search records by name with fuzzy matching                  |
+| `read_group`   | Count and aggregate records per group, without fetching them |
 
 ### Write Operations
 

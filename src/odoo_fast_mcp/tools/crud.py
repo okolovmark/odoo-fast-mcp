@@ -1,5 +1,5 @@
-"""CRUD tools: search, read, search_read, search_count, name_search, create, write, unlink,
-and message_post for chatter notes."""
+"""CRUD tools: search, read, search_read, search_count, name_search, read_group,
+create, write, unlink, and message_post for chatter notes."""
 
 import json
 from typing import Annotated, Any, Literal
@@ -254,6 +254,80 @@ async def name_search(
         ),
     )
     return [{"id": r[0], "name": r[1]} for r in results]
+
+
+@mcp.tool(
+    annotations={
+        "title": "Group and Aggregate Records",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    },
+)
+async def read_group(
+    model: Annotated[str, Field(description="Model name (e.g., 'sale.order')")],
+    groupby: Annotated[
+        str,
+        Field(
+            description="JSON array of fields to group by, e.g. '[\"department_id\"]' or "
+            "'[\"date_order:month\", \"user_id\"]'. Date fields take :day, :week, :month, "
+            ":quarter or :year.",
+        ),
+    ],
+    fields: Annotated[
+        str,
+        Field(
+            description="JSON array of aggregates per group, e.g. "
+            "'[\"amount_total:sum\", \"product_uom_qty:avg\"]'. Each is 'field' (its "
+            "default aggregate), 'field:agg', or 'name:agg(field)'; agg is a PostgreSQL "
+            "aggregate or count_distinct. The default '[\"__count\"]' counts records only; "
+            "'[]' makes Odoo aggregate every numeric field, ids and sequences included.",
+        ),
+    ] = '["__count"]',
+    domain: Annotated[
+        str,
+        Field(description="Search domain as JSON string, e.g. '[[\"active\", \"=\", true]]'"),
+    ] = "[]",
+    lazy: Annotated[
+        bool,
+        Field(
+            description="False groups by every field in `groupby` at once and counts each "
+            "group in `__count`. True groups by the first field only, as the list view "
+            "does, and names the count `<field>_count`.",
+        ),
+    ] = False,
+    orderby: Annotated[
+        str | None, Field(description="Sort order of the groups, e.g. 'amount_total desc'"),
+    ] = None,
+    offset: Annotated[int, Field(description="Number of groups to skip", ge=0)] = 0,
+    limit: Annotated[
+        int | None, Field(description="Maximum number of groups to return (None for all)"),
+    ] = None,
+) -> list[dict[str, Any]]:
+    """Count and total records per group in one query, without fetching the records.
+
+    Use it for "how many per department", "revenue per month", "stock per
+    location": the database does the grouping, so the answer does not depend on
+    how many records fit through `search_read`. Each group carries the values
+    it was grouped by, the requested aggregates, its count and `__domain`, the
+    domain to pass to `search_read` to list the records behind it.
+    """
+    parsed_domain = json.loads(domain)
+    parsed_fields = json.loads(fields)
+    parsed_groupby = json.loads(groupby)
+    return await to_thread.run_sync(
+        lambda: odoo_manager.read_group(
+            model=model,
+            domain=parsed_domain,
+            fields=parsed_fields,
+            groupby=parsed_groupby,
+            offset=offset,
+            limit=limit,
+            orderby=orderby,
+            lazy=lazy,
+        ),
+    )
 
 
 # =============================================================================

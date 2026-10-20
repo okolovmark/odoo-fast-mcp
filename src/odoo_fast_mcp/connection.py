@@ -175,6 +175,28 @@ class OdooConnectionManager:
             domain, fields=fields, offset=offset, limit=limit, order=order,
         )
 
+    def read_group(
+        self,
+        model: str,
+        domain: list,
+        fields: list[str],
+        groupby: list[str],
+        offset: int = 0,
+        limit: int | None = None,
+        orderby: str | None = None,
+        lazy: bool = True,
+    ) -> list[dict[str, Any]]:
+        """Group records and aggregate each group, in one query.
+
+        Through the model rather than bare ``execute_kw`` so the user context
+        goes along, as with ``search_read``: group labels such as month names
+        and selection values come back in the user's language.
+        """
+        return self.odoo.env[model].read_group(
+            domain, fields, groupby,
+            offset=offset, limit=limit, orderby=orderby or False, lazy=lazy,
+        )
+
     def create(
         self,
         model: str,
