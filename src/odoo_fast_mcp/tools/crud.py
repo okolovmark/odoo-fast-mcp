@@ -1,4 +1,5 @@
-"""CRUD tools: search, read, search_read, search_count, name_search, create, write, unlink."""
+"""CRUD tools: search, read, search_read, search_count, name_search, create, write, unlink,
+and message_post for chatter notes."""
 
 import json
 from typing import Annotated, Any, Literal
@@ -259,6 +260,54 @@ async def name_search(
 # Write Tools
 # =============================================================================
 
+# Context keys a write may carry without going through `execute`. Each one only
+# quiets the chatter around the write (the "created" log line, the follower it
+# adds, the mail to a new assignee, the tracking values) or names the language
+# and timezone the values are taken in. None changes which records are written
+# or what goes into them, so they can ride on tools a client lets run without
+# asking every time. Keys that do change behaviour — `default_*` leaking into
+# the records a create makes along the way, `active_test`, company switches, a
+# module's own flags — stay with `execute`, which is flagged and confirmed.
+QUIET_CONTEXT_KEYS = frozenset({
+    "mail_create_nolog",
+    "mail_create_nosubscribe",
+    "mail_auto_subscribe_no_notify",
+    "mail_notrack",
+    "tracking_disable",
+    "lang",
+    "tz",
+})
+
+CONTEXT_DESCRIPTION = (
+    "JSON object of context keys that keep the write out of the chatter, e.g. "
+    "'{\"mail_create_nolog\": true, \"mail_auto_subscribe_no_notify\": true}'. "
+    f"Accepted keys: {', '.join(sorted(QUIET_CONTEXT_KEYS))}. "
+    "Any other key is refused: call the method through `execute` instead."
+)
+
+
+def _quiet_context(context: str | None) -> dict[str, Any] | None:
+    """Parse a tool's ``context`` argument, refusing keys outside the quiet set.
+
+    Refused before anything reaches Odoo, and loudly: dropping an unknown key
+    and writing anyway would carry out a different call from the one asked for.
+    """
+    if not context:
+        return None
+    parsed = json.loads(context)
+    if not isinstance(parsed, dict):
+        msg = "context must be a JSON object, e.g. '{\"mail_notrack\": true}'."
+        raise TypeError(msg)
+    refused = sorted(set(parsed) - QUIET_CONTEXT_KEYS)
+    if refused:
+        msg = (
+            f"context key(s) {', '.join(refused)} not accepted here. This tool takes "
+            f"only {', '.join(sorted(QUIET_CONTEXT_KEYS))}; call the method through "
+            "`execute` to pass anything else."
+        )
+        raise ValueError(msg)
+    return parsed or None
+
 
 @mcp.tool(
     annotations={
@@ -278,6 +327,7 @@ async def create(
             "'{\"name\": \"John Doe\", \"email\": \"john@example.com\"}'",
         ),
     ],
+    context: Annotated[str | None, Field(description=CONTEXT_DESCRIPTION)] = None,
 ) -> dict[str, Any]:
     """Create a new record in the specified model.
 
@@ -289,8 +339,9 @@ async def create(
     - Product: {"name": "Widget", "list_price": 99.99, "type": "product"}
     """
     parsed_values = json.loads(values)
+    parsed_context = _quiet_context(context)
     record_id = await to_thread.run_sync(
-        lambda: odoo_manager.create(model=model, values=parsed_values),
+        lambda: odoo_manager.create(model=model, values=parsed_values, context=parsed_context),
     )
     return {"id": record_id, "_url": _record_url(odoo_manager.web_url, model, record_id)}
 
@@ -316,6 +367,7 @@ async def write(
             "'{\"name\": \"Updated Name\"}'",
         ),
     ],
+    context: Annotated[str | None, Field(description=CONTEXT_DESCRIPTION)] = None,
 ) -> bool:
     """Update existing records with new values.
 
@@ -331,8 +383,11 @@ async def write(
     """
     parsed_ids = json.loads(ids)
     parsed_values = json.loads(values)
+    parsed_context = _quiet_context(context)
     return await to_thread.run_sync(
-        lambda: odoo_manager.write(model=model, ids=parsed_ids, values=parsed_values),
+        lambda: odoo_manager.write(
+            model=model, ids=parsed_ids, values=parsed_values, context=parsed_context,
+        ),
     )
 
 
@@ -364,3 +419,63 @@ async def unlink(
     return await to_thread.run_sync(
         lambda: odoo_manager.unlink(model=model, ids=parsed_ids),
     )
+
+
+# =============================================================================
+# Chatter
+# =============================================================================
+
+
+@mcp.tool(
+    annotations={
+        "title": "Log Note",
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "idempotentHint": False,
+        "openWorldHint": False,
+    },
+)
+async def message_post(
+    model: Annotated[str, Field(description="Model of the record, e.g. 'project.task'")],
+    res_id: Annotated[int, Field(description="ID of the record the note goes on", ge=1)],
+    body: Annotated[
+        str,
+        Field(
+            description="The note as HTML, e.g. '<p><b>Progress</b> — tests pass</p>'",
+            min_length=1,
+        ),
+    ],
+    attachment_ids: Annotated[
+        str | None,
+        Field(
+            description="JSON array of ir.attachment IDs to show in the note, e.g. '[12, 13]' "
+            "— typically files stored on the record with `begin_upload`",
+        ),
+    ] = None,
+    context: Annotated[str | None, Field(description=CONTEXT_DESCRIPTION)] = None,
+) -> dict[str, Any]:
+    """Log an internal note in a record's chatter, as the signed-in user.
+
+    Posts what the chatter's *Log note* button posts: a note internal users
+    see on the record, which mails nobody unless they chose to follow notes.
+    It mentions no one and its author is always whoever is connected. A message
+    to followers, a mention, or anything else `message_post` takes goes through
+    `execute`.
+
+    Pass `{"mail_create_nosubscribe": true}` as `context` to post without
+    becoming a follower of the record.
+
+    Returns the new message's `id` and `_url`, the record the note is on.
+    """
+    parsed_attachments = json.loads(attachment_ids) if attachment_ids else None
+    parsed_context = _quiet_context(context)
+    message_id = await to_thread.run_sync(
+        lambda: odoo_manager.message_post(
+            model=model,
+            res_id=res_id,
+            body=body,
+            attachment_ids=parsed_attachments,
+            context=parsed_context,
+        ),
+    )
+    return {"id": message_id, "_url": _record_url(odoo_manager.web_url, model, res_id)}

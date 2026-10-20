@@ -82,10 +82,14 @@ AUTHENTICATED_INSTRUCTIONS = """
 
     ## Available Operations
     - **Read**: search, read, search_read, search_count, name_search
-    - **Write**: create, write (update), unlink (delete)
+    - **Write**: create, write (update), unlink (delete), message_post (log a note)
     - **Meta**: get_model_fields, list_models, get_server_version
     - **Advanced**: execute (call any model method), get_report
     - **Files**: begin_upload (attach a local file to a record without base64)
+
+    `create`, `write` and `message_post` take a `context` limited to the keys
+    that keep a call out of the chatter. Use them rather than `execute` for
+    plain writes and notes; `execute` is for anything else.
 
     Records from `read`, `search_read` and `create` carry `_url` — the record in
     the Odoo web client. Quote it when you report, so the person can open the
@@ -129,9 +133,13 @@ mcp: FastMCP = FastMCP(
         ## Available Operations
         - **Connection**: connect, disconnect, list_databases, get_server_version
         - **Read**: search, read, search_read, search_count, name_search
-        - **Write**: create, write (update), unlink (delete)
+        - **Write**: create, write (update), unlink (delete), message_post (log a note)
         - **Meta**: get_model_fields, list_models
         - **Advanced**: execute (call any model method), get_report
+
+        `create`, `write` and `message_post` take a `context` limited to the keys
+        that keep a call out of the chatter. Use them rather than `execute` for
+        plain writes and notes; `execute` is for anything else.
 
         Records from `read`, `search_read` and `create` carry `_url` — the record in
         the Odoo web client. Quote it when you report, so the person can open the

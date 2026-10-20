@@ -70,7 +70,7 @@ class _FakeManager:
     def read(self, model, ids, fields):
         return [{"id": i, "name": f"R{i}"} for i in ids]
 
-    def create(self, model, values):
+    def create(self, model, values, context=None):
         return 42
 
 

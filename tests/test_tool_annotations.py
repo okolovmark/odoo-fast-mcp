@@ -42,6 +42,10 @@ EXPECTED = {
     # {"order_line": [[0, 0, {...}]]} appends another line every call.
     "write": (False, True, False, False),
     "unlink": (False, True, False, False),
+    # `message_post` logs an internal note: it adds a message and changes
+    # nothing that was there, two calls are two notes, and with no mentions and
+    # no author override it stays inside Odoo.
+    "message_post": (False, False, False, False),
     # `execute` runs any method on any model: unlink and action_cancel included
     # (destructive), and a method may post mail or call out through a connector,
     # which no other tool here can do (open-world).

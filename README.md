@@ -68,11 +68,30 @@ in other project you can use it like this:
 
 ### Write Operations
 
-| Tool     | Description                    |
-| -------- | ------------------------------ |
-| `create` | Create a new record in a model            |
-| `write`  | Update existing records (destructive)     |
-| `unlink` | Delete records (destructive)              |
+| Tool           | Description                                 |
+| -------------- | ------------------------------------------- |
+| `create`       | Create a new record in a model              |
+| `write`        | Update existing records (destructive)       |
+| `unlink`       | Delete records (destructive)                |
+| `message_post` | Log an internal note in a record's chatter  |
+
+### Quiet writes
+
+`create`, `write` and `message_post` take an optional `context`, limited to the
+keys that keep a call out of the chatter: `mail_create_nolog`,
+`mail_create_nosubscribe`, `mail_auto_subscribe_no_notify`, `mail_notrack`,
+`tracking_disable`, plus `lang` and `tz`. Any other key is refused before the
+call reaches Odoo.
+
+The point is the approval prompt. Clients ask per tool, and `execute` runs any
+method on any model, so a client rightly asks every time. Without a context on
+the plain tools, a write that only needed to stay quiet had to go through
+`execute` and was confirmed like an `unlink`. Keys that change what a call does,
+such as `default_*` or `active_test`, still go through `execute`.
+
+`message_post` posts what the *Log note* button posts: a note authored by the
+signed-in user, mentioning nobody. Messages to followers, mentions and anything
+else `message_post` accepts go through `execute`.
 
 ### Metadata Tools
 

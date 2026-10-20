@@ -178,7 +178,7 @@ async def begin_upload(
     One link, one file, within `expires_in` seconds, up to `max_bytes`. The
     upload answers with the attachment's `id` and its sha1 `checksum`; compare
     it with `sha1sum FILE`. To show files in the chatter, post a note with
-    `execute` `message_post` and `attachment_ids`: one note can carry several.
+    `message_post` and `attachment_ids`: one note can carry several.
 
     Needs a shell that can reach this server. Without one, a small file can
     still go through `create` on ir.attachment with base64 `datas`.

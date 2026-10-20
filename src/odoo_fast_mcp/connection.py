@@ -175,13 +175,58 @@ class OdooConnectionManager:
             domain, fields=fields, offset=offset, limit=limit, order=order,
         )
 
-    def create(self, model: str, values: dict[str, Any]) -> int:
-        """Create a new record."""
-        return self.odoo.env[model].create(values)
+    def create(
+        self,
+        model: str,
+        values: dict[str, Any],
+        context: dict[str, Any] | None = None,
+    ) -> int:
+        """Create a new record.
 
-    def write(self, model: str, ids: list[int], values: dict[str, Any]) -> bool:
+        odoorpc sends the user context (lang, tz) with every model call;
+        ``context`` is merged over it rather than replacing it.
+        """
+        target = self.odoo.env[model]
+        if context:
+            target = target.with_context(**context)
+        return target.create(values)
+
+    def write(
+        self,
+        model: str,
+        ids: list[int],
+        values: dict[str, Any],
+        context: dict[str, Any] | None = None,
+    ) -> bool:
         """Update existing records."""
+        if context:
+            return self.odoo.execute_kw(model, "write", [ids, values], {"context": context})
         return self.odoo.execute(model, "write", ids, values)
+
+    def message_post(
+        self,
+        model: str,
+        res_id: int,
+        body: str,
+        attachment_ids: list[int] | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> int:
+        """Log an internal note on one record. Returns the new mail.message id.
+
+        What the chatter's *Log note* button posts: a comment with the note
+        subtype. ``message_type`` defaults to ``notification`` over RPC, which
+        Odoo treats as a system message, so it is set explicitly.
+        """
+        kwargs: dict[str, Any] = {
+            "body": body,
+            "message_type": "comment",
+            "subtype_xmlid": "mail.mt_note",
+        }
+        if attachment_ids:
+            kwargs["attachment_ids"] = attachment_ids
+        if context:
+            kwargs["context"] = context
+        return self.odoo.execute_kw(model, "message_post", [[res_id]], kwargs)
 
     def unlink(self, model: str, ids: list[int]) -> bool:
         """Delete records."""
