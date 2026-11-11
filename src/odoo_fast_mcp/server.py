@@ -25,6 +25,7 @@ from mcp.types import Icon
 from odoo_fast_mcp.config import load_config, parse_odoo_url
 from odoo_fast_mcp.connection import odoo_manager, registry
 from odoo_fast_mcp.prompts import register_prompts
+from odoo_fast_mcp.status import enable_status
 
 logger = logging.getLogger(__name__)
 
@@ -271,6 +272,10 @@ async def _main_async(
             logger.info("Auto-connected to Odoo at %s", config["odoo_url"])
         except (ConnectionError, odoorpc.error.RPCError, OSError) as e:
             logger.warning("Auto-connect failed: %s. Use 'connect' tool manually.", e)
+
+    if transport in ("http", "sse"):
+        base_url = config["base_url"].rstrip("/")
+        enable_status(mcp, config["odoo_url"], f"{base_url}/mcp" if base_url else "")
 
     if transport == "http":
         logger.info("Starting HTTP (Streamable HTTP) transport on %s:%d", host, port)

@@ -244,6 +244,12 @@ odoo-fast-mcp --transport http --port 3001 --debug
 
 The server will be available at `http://<host>:<port>/mcp`.
 
+`/` is a status page: how long the server has been up, whether Odoo answers its
+`/web/health`, the deployed build and the URL to connect with. `/healthz` gives
+the same as JSON for monitors, 200 when Odoo answers and 503 when it does not.
+Neither needs a sign-in, and Odoo is probed at most once every 30 seconds
+however many callers ask.
+
 You can also configure transport via environment variables in your `.env` file:
 
 ```bash
