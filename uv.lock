@@ -874,7 +874,7 @@ dev = [
 requires-dist = [
     { name = "cryptography", specifier = ">=42.0.0" },
     { name = "fastmcp", specifier = "==3.4.7" },
-    { name = "mcp", specifier = ">=1.29.0" },
+    { name = "mcp", specifier = ">=1.30.0" },
     { name = "odoorpc", specifier = "==0.10.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },

@@ -26,8 +26,9 @@ dependencies = [
     "cryptography>=42.0.0",
     "fastmcp==3.4.7",
     # auth/provider.py reads `subject` off AuthorizationCode and RefreshToken;
-    # older SDKs drop the field and the token endpoint answers 500.
-    "mcp>=1.29.0",
+    # older SDKs drop the field and the token endpoint answers 500. 1.30 is the
+    # first to end idle sessions by default; FastMCP passes no timeout of its own.
+    "mcp>=1.30.0",
     "python-dotenv>=1.0.0"
 ]
 
