@@ -17,8 +17,11 @@ import secrets
 import sqlite3
 import threading
 import time
+from contextlib import AbstractContextManager
 from pathlib import Path
 from typing import Any
+
+from odoo_fast_mcp.auth.db import connect
 
 logger = logging.getLogger(__name__)
 
@@ -86,10 +89,8 @@ class OAuthStore:
             for statement in _SCHEMA:
                 conn.execute(statement)
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._path, timeout=10)
-        conn.execute("PRAGMA journal_mode=WAL")
-        return conn
+    def _connect(self) -> AbstractContextManager[sqlite3.Connection]:
+        return connect(self._path)
 
     # -- clients ----------------------------------------------------------
 

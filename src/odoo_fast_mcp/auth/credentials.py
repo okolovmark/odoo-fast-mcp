@@ -15,6 +15,7 @@ the recovery path we want when a laptop goes missing.
 import logging
 import sqlite3
 import threading
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,6 +23,7 @@ from typing import Any
 
 from cryptography.fernet import Fernet, InvalidToken
 
+from odoo_fast_mcp.auth.db import connect
 from odoo_fast_mcp.connection import OdooConnectionManager
 
 logger = logging.getLogger(__name__)
@@ -133,10 +135,8 @@ class CredentialStore:
         with self._connect() as conn:
             conn.execute(_SCHEMA)
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._path, timeout=10)
-        conn.execute("PRAGMA journal_mode=WAL")
-        return conn
+    def _connect(self) -> AbstractContextManager[sqlite3.Connection]:
+        return connect(self._path)
 
     def put(self, subject: str, credentials: OdooCredentials) -> None:
         """Store (or replace) one subject's credential."""
