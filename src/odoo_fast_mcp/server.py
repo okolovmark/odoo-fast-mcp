@@ -234,19 +234,33 @@ def _enable_odoo_auth(config: dict[str, Any]) -> None:
     logger.info("Authentication enabled: callers sign in with their own Odoo login")
 
 
+def resolve_transport(
+    transport: str | None = None,
+    host: str | None = None,
+    port: int | None = None,
+) -> tuple[str, str, int]:
+    """Transport, host and port: a CLI argument, else MCP_*, else the default.
+
+    The CLI leaves an option it was not given as None, so an explicit
+    `--port 8000` is told apart from no `--port` at all. Read after
+    `load_config`, so a `.env` file counts as the environment.
+    """
+    return (
+        transport or os.getenv("MCP_TRANSPORT") or "stdio",
+        host or os.getenv("MCP_HOST") or "0.0.0.0",
+        port if port is not None else int(os.getenv("MCP_PORT") or 8000),
+    )
+
+
 async def _main_async(
     env_path: str | None = None,
-    transport: str = "stdio",
-    host: str = "0.0.0.0",
-    port: int = 8000,
+    transport: str | None = None,
+    host: str | None = None,
+    port: int | None = None,
 ) -> None:
     """Async entry point for the MCP server."""
     config = load_config(env_path)
-
-    # Allow env vars to override CLI defaults
-    transport = os.getenv("MCP_TRANSPORT", transport)
-    host = os.getenv("MCP_HOST", host)
-    port = int(os.getenv("MCP_PORT", str(port)))
+    transport, host, port = resolve_transport(transport, host, port)
 
     authenticated = config["auth"] == "odoo"
     if authenticated:
@@ -293,22 +307,22 @@ def main_cli() -> None:
     parser = argparse.ArgumentParser(description="Run the Odoo Fast MCP server.")
     parser.add_argument("--env", help="Path to .env configuration file")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+    # No argparse defaults: an option left out falls back to MCP_* and only
+    # then to the default, in resolve_transport.
     parser.add_argument(
         "--transport",
         choices=["stdio", "http", "sse"],
-        default="stdio",
-        help="Transport protocol: stdio (default), http (Streamable HTTP), or sse",
+        help="Transport protocol: stdio, http (Streamable HTTP), or sse "
+        "(default: MCP_TRANSPORT, else stdio)",
     )
     parser.add_argument(
         "--host",
-        default="0.0.0.0",
-        help="Host to bind HTTP/SSE server to (default: 0.0.0.0)",
+        help="Host to bind HTTP/SSE server to (default: MCP_HOST, else 0.0.0.0)",
     )
     parser.add_argument(
         "--port",
         type=int,
-        default=8000,
-        help="Port for HTTP/SSE server (default: 8000)",
+        help="Port for HTTP/SSE server (default: MCP_PORT, else 8000)",
     )
     args = parser.parse_args()
 
